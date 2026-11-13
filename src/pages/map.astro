@@ -1,0 +1,166 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import LocationSearch from '../components/search/LocationSearch.astro';
+import { STANDARDS } from '../lib/aqi/standards';
+import { waqi } from '../lib/config';
+
+export const prerender = false;
+Astro.cache.set({ maxAge: 3600, swr: 86400 });
+
+const cats = STANDARDS.us.categories;
+---
+
+<BaseLayout
+  title="Global Air Quality Map — Live AQI Worldwide | Live AQI"
+  description="Interactive world air-quality map: live AQI for 300+ major cities, colour-coded by category, with PM2.5, 24-hour change and links to every city dashboard."
+  canonicalPath="/map"
+  bare
+>
+  <div class="flex flex-col-reverse lg:h-[calc(100dvh-4rem)] lg:flex-row">
+    <aside data-map-panel class="stage w-full shrink-0 border-stage-line lg:w-[25rem] lg:overflow-y-auto lg:border-r">
+      <div class="space-y-7 p-5 lg:p-6">
+        <div>
+          <h1 class="type-title">Global air quality map</h1>
+          <p data-map-meta class="mt-2 text-caption text-on-stage-faint">Loading live readings…</p>
+        </div>
+
+        <LocationSearch id="map-search" tone="dark" mode="event" label="Find a place on the map" placeholder="Fly to a city or station" />
+
+        <div>
+          <p class="text-sm text-on-stage-muted">Standard</p>
+          <div class="seg mt-2" role="group" aria-label="AQI standard">
+            <button type="button" data-std="us" aria-pressed="true">US AQI</button>
+            <button type="button" data-std="in" aria-pressed="false">India NAQI</button>
+          </div>
+        </div>
+
+        {
+          waqi.enabled && (
+            <label class="flex cursor-pointer items-start gap-3">
+              <input data-stations-toggle type="checkbox" class="peer sr-only" />
+              <span class="relative mt-0.5 h-5 w-9 shrink-0 rounded-full border border-line-strong bg-surface-3 transition-colors peer-checked:bg-accent peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-accent after:absolute after:top-0.5 after:left-0.5 after:size-3.5 after:rounded-full after:bg-surface after:shadow after:transition-transform peer-checked:after:translate-x-4" />
+              <span>
+                <span class="block text-sm font-semibold">Ground monitoring stations</span>
+                <span class="block text-caption text-on-stage-faint">Measured US AQI via WAQI. Appears when zoomed in.</span>
+              </span>
+            </label>
+          )
+        }
+
+        <div>
+          <p class="text-sm text-on-stage-muted">Show categories</p>
+          <ul class="mt-2 space-y-1">
+            {
+              cats.map((c) => (
+                <li>
+                  <button
+                    type="button"
+                    data-level={c.level}
+                    aria-pressed="true"
+                    class="flex w-full items-center gap-3 rounded-ui px-2 py-1.5 text-left text-sm transition-colors hover:bg-surface-2 aria-[pressed=false]:opacity-45"
+                  >
+                    <span data-level-swatch class="swatch size-3" style={`--cat:${c.color}`} />
+                    <span data-level-label class="flex-1">{c.label}</span>
+                    <span data-level-range class="font-mono text-[0.6875rem] text-on-stage-faint">{c.max === Infinity ? `${c.min}+` : `${c.min}–${c.max}`}</span>
+                    <span data-level-count class="w-8 text-right font-mono text-xs text-on-stage-muted">–</span>
+                  </button>
+                </li>
+              ))
+            }
+          </ul>
+          <p class="mt-2 text-caption text-on-stage-faint">Select a category to hide or show it. Counts are cities currently in that category.</p>
+        </div>
+
+        <p data-map-status role="status" aria-live="polite" class="rounded-ui border border-stage-line p-3 text-sm text-on-stage-muted" hidden></p>
+
+        <div>
+          <h2 class="font-bold">Most polluted in view</h2>
+          <ol data-in-view class="mt-1 divide-y divide-stage-line text-on-stage" aria-live="polite"></ol>
+          <a href="/rankings" class="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold underline underline-offset-4">
+            See the full city rankings
+          </a>
+        </div>
+
+        <p class="text-caption text-on-stage-faint">
+          City markers show modelled readings (CAMS via Open-Meteo) for the world’s major cities, refreshed through the day.
+          Basemap © <a class="link" href="https://openfreemap.org" rel="noopener">OpenFreeMap</a>,
+          <a class="link" href="https://www.openstreetmap.org/copyright" rel="noopener">OpenStreetMap</a> contributors.
+          <a class="link" href="/methodology">Methodology</a>
+        </p>
+      </div>
+    </aside>
+
+    <div class="relative h-[62dvh] min-h-[22rem] flex-1 bg-stage lg:h-auto">
+      <!-- Inline position: MapLibre's unlayered CSS sets .maplibregl-map { position: relative }, which beats layered utilities. -->
+      <div id="map" style="position:absolute;inset:0" role="region" aria-label="Interactive world air-quality map" aria-busy="true"></div>
+      <div data-map-loading class="pointer-events-none absolute inset-0 flex items-center justify-center">
+        <p class="text-sm text-on-stage-muted">Loading the map…</p>
+      </div>
+      <noscript>
+        <div class="absolute inset-0 flex items-center justify-center p-6 text-center text-on-stage">
+          <p>The interactive map needs JavaScript. <a class="link" href="/rankings">See the city rankings</a> instead.</p>
+        </div>
+      </noscript>
+    </div>
+  </div>
+</BaseLayout>
+
+<style is:global>
+  .laqi-popup .maplibregl-popup-content {
+    border-radius: 4px;
+    padding: 12px 34px 12px 14px;
+    font-family: var(--font-sans);
+    color: #000;
+    box-shadow: var(--shadow-pop);
+  }
+  .laqi-popup .maplibregl-popup-close-button {
+    font-size: 18px;
+    width: 28px;
+    height: 28px;
+  }
+  .maplibregl-ctrl-group {
+    border-radius: 4px !important;
+  }
+</style>
+
+<script>
+  const container = document.getElementById('map')!;
+  const panel = document.querySelector<HTMLElement>('[data-map-panel]')!;
+  const loading = document.querySelector<HTMLElement>('[data-map-loading]');
+
+  function fail(message: string) {
+    loading?.remove();
+    const box = document.createElement('div');
+    box.className = 'absolute inset-0 flex items-center justify-center p-6';
+    const p = document.createElement('p');
+    p.className = 'max-w-sm text-center text-on-stage-muted';
+    p.textContent = message;
+    const a = document.createElement('a');
+    a.href = '/rankings';
+    a.className = 'mt-3 block font-semibold text-ink underline underline-offset-4';
+    a.textContent = 'See the city rankings instead';
+    p.appendChild(a);
+    box.appendChild(p);
+    container.parentElement!.appendChild(box);
+  }
+
+  const hasWebGL = (() => {
+    try {
+      const c = document.createElement('canvas');
+      return Boolean(c.getContext('webgl2') || c.getContext('webgl'));
+    } catch {
+      return false;
+    }
+  })();
+
+  if (!hasWebGL) {
+    fail('Your browser or device does not support WebGL, which the interactive map needs.');
+  } else {
+    import('../scripts/map/global-map')
+      .then((m) => m.initGlobalMap({ container, panel, stationsEnabled: Boolean(panel.querySelector('[data-stations-toggle]')) }))
+      .catch((err) => {
+        console.error(err);
+        fail('The map could not be loaded. Check your connection and refresh the page.');
+      });
+  }
+</script>

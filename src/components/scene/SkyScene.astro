@@ -1,0 +1,85 @@
+---
+/**
+ * The sky over a place: day (sun, clouds) or night (moon, stars), driven by
+ * [data-theme], with the city skyline along the bottom. Kuala Lumpur uses the
+ * commissioned artwork; every other place gets the generated skyline.
+ * The default slot is layered on top (the glass AQI card).
+ */
+import Skyline from './Skyline.astro';
+
+interface Props {
+  slug: string;
+  class?: string;
+}
+const { slug, class: className } = Astro.props;
+const isKualaLumpur = slug === 'kuala-lumpur';
+
+// Deterministic star field.
+let seed = 7;
+const rnd = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
+const stars = Array.from({ length: 46 }, () => ({ x: rnd() * 100, y: rnd() * 58, r: 0.6 + rnd() * 1.3, o: 0.35 + rnd() * 0.6 }));
+---
+
+<div
+  class:list={['scene relative isolate overflow-hidden rounded-scene', className]}
+  style="background: linear-gradient(180deg, var(--sky-top) 0%, var(--sky-mid) 52%, var(--sky-bottom) 100%)"
+>
+  <svg class="pointer-events-none absolute inset-0 -z-10 h-full w-full" aria-hidden="true" focusable="false">
+    {stars.map((s) => <circle cx={`${s.x.toFixed(2)}%`} cy={`${s.y.toFixed(2)}%`} r={s.r.toFixed(2)} fill="var(--star)" opacity={s.o.toFixed(2)} />)}
+  </svg>
+
+  <svg class="pointer-events-none absolute top-[7%] left-[5%] -z-10 w-[34%] max-w-[230px] dark:hidden" viewBox="0 0 220 80" aria-hidden="true">
+    <path d="M30 70h150a26 26 0 0 0 3-51.8A36 36 0 0 0 115 10a32 32 0 0 0-58 12A24 24 0 0 0 30 70Z" fill="var(--cloud)" />
+  </svg>
+  <svg class="pointer-events-none absolute top-[22%] right-[30%] -z-10 hidden w-[20%] max-w-[140px] dark:hidden sm:block" viewBox="0 0 220 80" aria-hidden="true">
+    <path d="M30 70h150a26 26 0 0 0 3-51.8A36 36 0 0 0 115 10a32 32 0 0 0-58 12A24 24 0 0 0 30 70Z" fill="var(--cloud)" opacity="0.8" />
+  </svg>
+
+  <img
+    src="/art/sun.webp"
+    alt=""
+    width="300"
+    height="304"
+    class="pointer-events-none absolute top-[3%] right-[6%] -z-10 w-[30%] max-w-[170px] dark:hidden"
+    decoding="async"
+  />
+  <img
+    src="/art/moon.webp"
+    alt=""
+    width="300"
+    height="302"
+    class="pointer-events-none absolute top-[3%] right-[6%] -z-10 hidden w-[26%] max-w-[150px] dark:block"
+    loading="lazy"
+    decoding="async"
+  />
+
+  <div class:list={['pointer-events-none absolute inset-x-0 bottom-0 -z-10', isKualaLumpur ? 'h-[80%]' : 'h-[52%] sm:h-[55%]']}>
+    {
+      isKualaLumpur ? (
+        <>
+          <img
+            src="/art/skyline-kuala-lumpur-day.webp"
+            alt=""
+            width="1199"
+            height="1052"
+            class="h-full w-full object-contain object-bottom dark:hidden"
+            decoding="async"
+          />
+          <img
+            src="/art/skyline-kuala-lumpur-night.webp"
+            alt=""
+            width="1199"
+            height="1085"
+            class="hidden h-full w-full object-contain object-bottom dark:block"
+            loading="lazy"
+            decoding="async"
+          />
+        </>
+      ) : (
+        <Skyline seed={slug} />
+      )
+    }
+  </div>
+
+  <slot />
+</div>

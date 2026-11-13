@@ -1,0 +1,135 @@
+---
+/** Living styleguide for the Live AQI "soft sky" design system (not indexed). */
+import BaseLayout from '../layouts/BaseLayout.astro';
+import SkyScene from '../components/scene/SkyScene.astro';
+import CategoryPill from '../components/aqi/CategoryPill.astro';
+import AqiScaleBar from '../components/aqi/AqiScaleBar.astro';
+import PollutantLabel from '../components/aqi/PollutantLabel.astro';
+import Icon from '../components/ui/Icon.astro';
+import { STANDARDS } from '../lib/aqi/standards';
+
+export const prerender = false;
+
+const tokens = [
+  ['bg', 'Page background'],
+  ['surface', 'Card'],
+  ['surface-2', 'Tile / inset'],
+  ['line', 'Divider'],
+  ['ink', 'Primary text'],
+  ['ink-2', 'Secondary text'],
+  ['ink-3', 'Tertiary text'],
+  ['accent', 'Accent / primary action'],
+  ['accent-soft', 'Active tab, chip'],
+  ['series-pm25', 'PM2.5 series'],
+  ['series-pm10', 'PM10 series'],
+];
+const type = [
+  ['type-hero', 'Hero', 'Air quality in India'],
+  ['type-section', 'Section', 'What’s in the air'],
+  ['type-title', 'Title', 'Air quality trend'],
+  ['text-base', 'Body', 'People with heart or lung disease are most at risk.'],
+  ['label', 'Label', 'US AQI'],
+];
+---
+
+<BaseLayout title="Styleguide — Live AQI design system" description="Tokens and components of the Live AQI design system." noindex>
+  <section class="stage">
+    <div class="shell pt-10 pb-12">
+      <h1 class="type-hero">Design system</h1>
+      <p class="mt-4 max-w-2xl text-lg text-ink-2">
+        A soft sky by day and a navy sky by night. Glass over the city, colour only where the air quality needs it. Use the
+        sun/moon button in the header to see both themes.
+      </p>
+    </div>
+  </section>
+
+  <div class="shell pt-4 pb-16">
+    <section class="mb-14">
+      <h2 class="type-section">Colour tokens</h2>
+      <p class="mt-1 text-ink-2">Every token switches with <code>[data-theme]</code>; components never hard-code a theme.</p>
+      <ul class="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {
+          tokens.map(([t, name]) => (
+            <li class="card overflow-hidden">
+              <div class="h-16 border-b border-line" style={`background: var(--${t})`} />
+              <div class="px-4 py-3">
+                <p class="font-semibold">{name}</p>
+                <p class="text-xs text-ink-3">--{t}</p>
+              </div>
+            </li>
+          ))
+        }
+      </ul>
+      <h3 class="mt-10 font-bold">AQI categories</h3>
+      <div class="mt-3 grid gap-6 lg:grid-cols-2">
+        {
+          (['us', 'in'] as const).map((std) => (
+            <div class="card p-5">
+              <p class="text-sm text-ink-3">{STANDARDS[std].name}</p>
+              <div class="mt-3 flex flex-wrap gap-2">
+                {STANDARDS[std].categories.map((c) => (
+                  <CategoryPill category={c} size="sm" />
+                ))}
+              </div>
+              <AqiScaleBar standard={std} value={null} class="mt-5" />
+            </div>
+          ))
+        }
+      </div>
+    </section>
+
+    <section class="mb-14">
+      <h2 class="type-section">Type</h2>
+      <p class="mt-1 text-ink-2">Plus Jakarta Sans (variable, OFL), weights 200–800.</p>
+      <dl class="card mt-6 divide-y divide-line px-5">
+        {
+          type.map(([cls, name, sample]) => (
+            <div class="grid gap-2 py-5 sm:grid-cols-[10rem_minmax(0,1fr)] sm:items-baseline">
+              <dt class="text-sm text-ink-3">{name} <span class="block text-xs">.{cls}</span></dt>
+              <dd class={cls}>{sample}</dd>
+            </div>
+          ))
+        }
+      </dl>
+    </section>
+
+    <section class="mb-14">
+      <h2 class="type-section">Components</h2>
+      <div class="mt-6 grid gap-6 lg:grid-cols-2">
+        <div class="card space-y-5 p-6">
+          <div class="flex flex-wrap gap-2">
+            <button class="btn btn-primary" type="button"><Icon name="bell" size={17} /> Get alerts</button>
+            <button class="btn btn-secondary" type="button"><Icon name="share" size={17} /> Share</button>
+            <button class="btn btn-secondary" type="button" disabled>Disabled</button>
+          </div>
+          <div class="seg"><button type="button" aria-pressed="true">24 h</button><button type="button" aria-pressed="false">7 days</button><button type="button" aria-pressed="false">Next 48 h</button></div>
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="chip">India NAQI</span>
+            <span class="aqi-badge" style="--cat:#F2C94C;--cat-ink:#3A2C00">AQI</span>
+            <span class="text-lg font-bold"><PollutantLabel id="pm25" /> <PollutantLabel id="no2" /> <PollutantLabel id="o3" /></span>
+          </div>
+          <div class="tile flex items-center justify-between px-4 py-3 text-sm">
+            <span class="text-ink-2">Tile</span><span class="font-bold">Inset surface</span>
+          </div>
+        </div>
+        <SkyScene slug="styleguide" class="grid min-h-[20rem] place-items-center p-6">
+          <div class="glass w-full max-w-xs p-5 text-center">
+            <p class="font-bold">Glass card</p>
+            <p class="mt-1 text-sm text-ink-2">Sits over the sky scene; blurs what is behind it.</p>
+          </div>
+        </SkyScene>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="type-section">Motion and layers</h2>
+      <dl class="code-card mt-6 grid grid-cols-[auto_1fr] gap-x-8 gap-y-1.5 p-6 text-sm">
+        <dt class="text-ink-3">--duration-fast</dt><dd>120ms, hover and press</dd>
+        <dt class="text-ink-3">--duration-base</dt><dd>200ms, most interactions</dd>
+        <dt class="text-ink-3">--duration-slow</dt><dd>320ms, toasts and overlays</dd>
+        <dt class="text-ink-3">Reduced motion</dt><dd>Global rule in the base layer</dd>
+        <dt class="text-ink-3">z-index</dt><dd>header 40, overlay 50, popover 55, toast 60, skip link 70</dd>
+      </dl>
+    </section>
+  </div>
+</BaseLayout>

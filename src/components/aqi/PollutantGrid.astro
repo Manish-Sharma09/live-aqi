@@ -1,0 +1,141 @@
+---
+/** Pollutants as DESIGN.md code-sample cards: pale, hairline, mono literals, tiny swatches. */
+import PollutantLabel from './PollutantLabel.astro';
+import { POLLUTANTS } from '../../lib/aqi/pollutants';
+import { POLLUTANT_IDS, STANDARDS, categoryFor, type StandardId } from '../../lib/aqi/standards';
+import { formatConcentration } from '../../lib/format';
+import type { CurrentReading } from '../../lib/services/reports';
+
+interface Props {
+  current: CurrentReading;
+  standard: StandardId;
+}
+
+const { current, standard } = Astro.props;
+const result = current.aqi[standard];
+const def = STANDARDS[standard];
+const scaleMax = def.scaleMax;
+
+const items = POLLUTANT_IDS.filter((p) => current.concentrations[p] !== undefined).map((p) => {
+  const info = POLLUTANTS[p];
+  const sub = result?.subIndices[p];
+  const cat = sub ? categoryFor(standard, sub.index) : null;
+  const guideMean = info.who.averaging === '8-h' ? current.means8[p as 'o3' | 'co'] : current.means24[p];
+  const naaqsMean = info.naaqsIndia.averaging === '8-h' ? current.means8[p as 'o3' | 'co'] : current.means24[p];
+  return {
+    p,
+    info,
+    sub,
+    cat,
+    guideMean,
+    ratio: guideMean !== undefined ? guideMean / info.who.value : undefined,
+    naaqsMean,
+    hourly: current.concentrations[p]!,
+    main: result?.dominant === p,
+  };
+});
+// Main pollutant first, then by sub-index.
+items.sort((a, b) => Number(b.main) - Number(a.main) || (b.sub?.index ?? -1) - (a.sub?.index ?? -1));
+
+const segments = def.categories.map((c) => ({
+  color: c.color,
+  width: ((Math.min(c.max, scaleMax) - (c.level === 0 ? 0 : c.min - 1)) / scaleMax) * 100,
+}));
+---
+
+{
+  items.length === 0 ? (
+    <p class="text-muted">Pollutant measurements aren’t available for this location right now. Try again in a few minutes.</p>
+  ) : (
+    <ul class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      {items.map(({ p, info, sub, cat, guideMean, ratio, naaqsMean, hourly, main }) => (
+        <li class="card flex flex-col p-5 sm:p-6">
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <h3 class="text-[1.5rem] leading-none font-extrabold tracking-[-0.02em]">
+                <PollutantLabel id={p} />
+              </h3>
+              <p class="mt-1.5 text-sm text-subtle">{info.name}</p>
+            </div>
+            {main && <span class="chip">Main pollutant</span>}
+          </div>
+
+          <p class="mt-6 flex items-baseline gap-2">
+            <span class="text-[2.25rem] leading-none font-bold tracking-[-0.03em]">{formatConcentration(hourly)}</span>
+            <span class="text-xs text-subtle">{info.displayUnit} now</span>
+          </p>
+
+          {sub && cat ? (
+            <div class="mt-5">
+              <div class="relative h-2" role="img" aria-label={`${def.shortName} sub-index ${sub.index} of ${scaleMax}, ${cat.label}`}>
+                <div class="flex h-full gap-0.5 overflow-hidden rounded-full">
+                  {segments.map((s) => (
+                    <span class="h-full opacity-45" style={`width:${s.width}%;background:${s.color}`} />
+                  ))}
+                </div>
+                <span
+                  class="absolute top-1/2 size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-surface bg-ink"
+                  style={`left:${Math.min(sub.index / scaleMax, 1) * 100}%`}
+                />
+              </div>
+              <p class="mt-3 flex items-center gap-2 text-sm">
+                <span class="swatch" style={`--cat:${cat.color}`} />
+                <span class="font-semibold">{cat.label}</span>
+              </p>
+            </div>
+          ) : (
+            <p class="mt-5 text-sm text-subtle">Not enough data for a {def.shortName} sub-index.</p>
+          )}
+
+          <dl class="mt-5 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 border-t border-line pt-4 text-[0.8125rem]">
+            {sub && (
+              <>
+                <dt class="text-subtle">Sub-index</dt>
+                <dd class="text-right">{sub.index} <span class="text-subtle">({sub.averaging})</span></dd>
+              </>
+            )}
+            {guideMean !== undefined && (
+              <>
+                <dt class="text-subtle">{info.who.averaging} average</dt>
+                <dd class="text-right">{formatConcentration(guideMean)} {info.displayUnit}</dd>
+              </>
+            )}
+            {ratio !== undefined && (
+              <>
+                <dt class="text-subtle">WHO guideline</dt>
+                <dd class="text-right">
+                  {info.who.value} {info.who.unit}{' '}
+                  <strong class:list={['font-bold', ratio < 1 && 'font-normal text-subtle']}>
+                    {ratio >= 1 ? `${ratio.toFixed(1)}×` : 'met'}
+                  </strong>
+                </dd>
+              </>
+            )}
+            {standard === 'in' && naaqsMean !== undefined && (
+              <>
+                <dt class="text-subtle">India limit</dt>
+                <dd class="text-right">
+                  {info.naaqsIndia.value} {info.naaqsIndia.unit}{' '}
+                  <strong class:list={['font-bold', naaqsMean <= info.naaqsIndia.value && 'font-normal text-subtle']}>
+                    {naaqsMean > info.naaqsIndia.value ? 'over' : 'met'}
+                  </strong>
+                </dd>
+              </>
+            )}
+          </dl>
+
+          <details class="group mt-auto pt-5">
+            <summary class="label inline-flex cursor-pointer items-center gap-2 text-subtle hover:text-ink">
+              <span class="transition-transform group-open:rotate-90" aria-hidden="true">›</span> About {info.ascii}
+            </summary>
+            <div class="mt-3 space-y-2 text-sm text-muted">
+              <p>{info.about}</p>
+              <p><span class="font-semibold text-ink">Sources.</span> {info.sources}</p>
+              <p><span class="font-semibold text-ink">Health.</span> {info.health}</p>
+            </div>
+          </details>
+        </li>
+      ))}
+    </ul>
+  )
+}

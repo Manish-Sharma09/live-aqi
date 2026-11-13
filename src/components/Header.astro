@@ -1,0 +1,179 @@
+---
+import Logo from './ui/Logo.astro';
+import Icon from './ui/Icon.astro';
+import LocationSearch from './search/LocationSearch.astro';
+
+interface Props {
+  /** Place shown in the location selector (dashboard pages). */
+  currentPlace?: { name: string } | undefined;
+}
+const { currentPlace } = Astro.props;
+const path = Astro.url.pathname;
+const nav = [
+  { href: '/', label: 'Overview', match: (p: string) => p === '/' || p.startsWith('/city/') },
+  { href: '/map', label: 'Map', match: (p: string) => p === '/map' },
+  { href: '/rankings', label: 'Rankings', match: (p: string) => p === '/rankings' },
+  { href: '/world', label: 'World', match: (p: string) => p === '/world' || p.startsWith('/country/') },
+  { href: '/alerts', label: 'Alerts', match: (p: string) => p === '/alerts' },
+];
+---
+
+<header class="sticky top-0 z-(--z-header) border-b border-line bg-[color-mix(in_srgb,var(--surface)_84%,transparent)] backdrop-blur-xl">
+  <div class="shell flex h-(--header-h) items-center gap-3">
+    <a href="/" class="shrink-0 rounded-ui py-1" aria-label="Live AQI home">
+      <Logo />
+    </a>
+
+    <nav aria-label="Primary" class="ml-4 hidden lg:block">
+      <ul class="flex items-center gap-1">
+        {
+          nav.map((item) => (
+            <li>
+              <a
+                href={item.href}
+                aria-current={item.match(path) ? 'page' : undefined}
+                class="inline-flex h-10 items-center rounded-full px-4 text-[0.9375rem] font-semibold text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink aria-[current=page]:bg-accent-soft aria-[current=page]:text-accent-ink"
+              >
+                {item.label}
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+    </nav>
+
+    <div class="ml-auto flex min-w-0 items-center gap-2">
+      <button
+        type="button"
+        data-open-search
+        class="inline-flex h-10 max-w-[8.75rem] min-w-0 items-center gap-1.5 rounded-full border border-line bg-surface px-3 text-[0.9375rem] font-semibold text-ink transition-colors hover:border-line-strong sm:max-w-[16rem] sm:gap-2 sm:px-3.5"
+        aria-haspopup="dialog"
+        aria-keyshortcuts="/"
+        title="Search a city (/)"
+      >
+        <Icon name="pin" size={17} class="shrink-0 text-ink-2" />
+        <span data-location-label class="truncate">{currentPlace?.name ?? 'Search a city'}</span>
+        <Icon name="chevron-down" size={16} class="shrink-0 text-ink-3" />
+      </button>
+
+      <span class="mx-1 hidden h-6 w-px bg-line sm:block" aria-hidden="true"></span>
+
+      <button
+        type="button"
+        data-theme-toggle
+        class="grid size-10 shrink-0 place-items-center rounded-full border border-line bg-surface text-ink transition-colors hover:border-line-strong"
+        aria-label="Switch to night theme"
+        title="Switch day / night"
+      >
+        <Icon name="sun" size={19} class="dark:hidden" />
+        <Icon name="moon" size={18} class="hidden dark:block" />
+      </button>
+
+      <button
+        type="button"
+        data-menu-toggle
+        class="grid size-10 shrink-0 place-items-center rounded-full border border-line bg-surface text-ink lg:hidden"
+        aria-expanded="false"
+        aria-controls="mobile-nav"
+      >
+        <Icon name="menu" size={20} label="Open menu" />
+      </button>
+    </div>
+  </div>
+
+  <nav id="mobile-nav" aria-label="Primary" hidden class="border-t border-line lg:hidden">
+    <ul class="shell grid grid-cols-2 gap-2 py-3 sm:grid-cols-5">
+      {
+        nav.map((item) => (
+          <li>
+            <a
+              href={item.href}
+              aria-current={item.match(path) ? 'page' : undefined}
+              class="flex h-11 items-center justify-center rounded-full border border-line bg-surface font-semibold text-ink-2 aria-[current=page]:border-transparent aria-[current=page]:bg-accent-soft aria-[current=page]:text-accent-ink"
+            >
+              {item.label}
+            </a>
+          </li>
+        ))
+      }
+    </ul>
+  </nav>
+</header>
+
+<dialog
+  id="search-dialog"
+  aria-label="Search locations"
+  class="m-0 mx-auto mt-[9vh] w-[min(38rem,calc(100vw-1.5rem))] max-w-none overflow-visible rounded-card border border-line bg-surface p-0 text-ink shadow-pop backdrop:bg-[rgb(8_18_43/0.45)] backdrop:backdrop-blur-sm"
+>
+  <div class="p-4 sm:p-5">
+    <div class="mb-3 flex items-center justify-between">
+      <p class="font-bold">Find air quality anywhere</p>
+      <button type="button" data-close-search class="grid size-9 place-items-center rounded-full hover:bg-surface-2">
+        <Icon name="x" size={18} label="Close search" />
+      </button>
+    </div>
+    <LocationSearch id="global-search" mode="navigate" label="Search a city, country, region or station" />
+    <p class="mt-3 text-xs text-ink-3">Press <kbd class="font-semibold">/</kbd> anywhere to search. Use ↑ ↓ and Enter to choose.</p>
+  </div>
+</dialog>
+
+<script>
+  import { getSavedLocation } from '../scripts/store';
+  import type { LaqiSearch } from '../scripts/search-element';
+
+  const dialog = document.getElementById('search-dialog') as HTMLDialogElement | null;
+  const search = document.getElementById('global-search') as LaqiSearch | null;
+
+  function openSearch() {
+    if (!dialog || dialog.open) return;
+    dialog.showModal();
+    requestAnimationFrame(() => search?.focusInput());
+  }
+  document.querySelectorAll('[data-open-search]').forEach((b) => b.addEventListener('click', openSearch));
+  document.querySelector('[data-close-search]')?.addEventListener('click', () => dialog?.close());
+  dialog?.addEventListener('click', (e) => {
+    if (e.target === dialog) dialog.close();
+  });
+  window.addEventListener('laqi:open-search', openSearch);
+  document.addEventListener('keydown', (e) => {
+    const t = e.target as HTMLElement;
+    const typing = t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName);
+    if (e.key === '/' && !typing && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      e.preventDefault();
+      openSearch();
+    }
+  });
+
+  const toggle = document.querySelector<HTMLButtonElement>('[data-menu-toggle]');
+  const mobileNav = document.getElementById('mobile-nav');
+  toggle?.addEventListener('click', () => {
+    const open = toggle.getAttribute('aria-expanded') === 'true';
+    toggle.setAttribute('aria-expanded', String(!open));
+    if (mobileNav) mobileNav.hidden = open;
+  });
+
+  // Day / night toggle — an override for this browsing session.
+  const root = document.documentElement;
+  const themeBtn = document.querySelector<HTMLButtonElement>('[data-theme-toggle]');
+  const syncThemeLabel = () =>
+    themeBtn?.setAttribute('aria-label', root.dataset.theme === 'dark' ? 'Switch to day theme' : 'Switch to night theme');
+  syncThemeLabel();
+  themeBtn?.addEventListener('click', () => {
+    const next = root.dataset.theme === 'dark' ? 'light' : 'dark';
+    root.dataset.theme = next;
+    try {
+      sessionStorage.setItem('laqi:theme', next);
+    } catch {
+      /* ignore */
+    }
+    syncThemeLabel();
+    window.dispatchEvent(new CustomEvent('laqi:theme-change', { detail: next }));
+  });
+
+  // Outside dashboards, show the visitor's saved location in the selector.
+  const label = document.querySelector<HTMLElement>('[data-location-label]');
+  if (label && root.dataset.themeSource !== 'city') {
+    const saved = getSavedLocation();
+    if (saved) label.textContent = saved.name;
+  }
+</script>

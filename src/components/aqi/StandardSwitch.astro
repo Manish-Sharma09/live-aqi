@@ -1,0 +1,22 @@
+---
+import type { StandardId } from '../../lib/aqi/standards';
+
+interface Props {
+  current: StandardId;
+  /** Base path; current query parameters are preserved. */
+  path?: string;
+  class?: string;
+}
+const { current, path = Astro.url.pathname, class: className } = Astro.props;
+
+const hrefFor = (std: StandardId) => {
+  const params = new URLSearchParams(Astro.url.search);
+  params.set('std', std);
+  return `${path}?${params}`;
+};
+---
+
+<nav aria-label="AQI standard" class:list={['seg', className]}>
+  <a href={hrefFor('us')} aria-current={current === 'us' ? 'page' : undefined} title="US EPA Air Quality Index">US AQI</a>
+  <a href={hrefFor('in')} aria-current={current === 'in' ? 'page' : undefined} title="India National Air Quality Index (CPCB)">India NAQI</a>
+</nav>

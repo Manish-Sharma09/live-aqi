@@ -1,0 +1,77 @@
+---
+import Icon from '../ui/Icon.astro';
+import type { HealthAdvice, AdviceTone } from '../../lib/aqi/health';
+
+interface Props {
+  advice: HealthAdvice;
+}
+
+const { advice } = Astro.props;
+const pips: Record<AdviceTone, number> = { ok: 1, caution: 2, warning: 3, danger: 4 };
+const toneText: Record<AdviceTone, string> = { ok: 'Low concern', caution: 'Some caution', warning: 'Take care', danger: 'High concern' };
+---
+
+<div class="grid gap-14 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] lg:gap-20">
+  <div>
+    <figure>
+      <blockquote class="type-title max-w-[24ch] text-[clamp(1.375rem,2.6vw,1.75rem)] leading-[1.2]">
+        “{advice.official.text}”
+      </blockquote>
+      <figcaption class="mt-4 text-sm text-subtle">Official health statement, {advice.official.source}</figcaption>
+    </figure>
+
+    <h3 class="mt-12 font-bold">Who is most at risk</h3>
+    <p class="mt-2 max-w-prose text-muted">{advice.atRisk}</p>
+
+    {
+      advice.checkLocalAdvisories && (
+        <div class="mt-8 flex gap-3 rounded-ui border border-line bg-surface-2 p-5" role="note">
+          <Icon name="alert" size={20} class="mt-0.5" />
+          <p class="text-sm leading-relaxed">
+            <strong class="font-semibold">Check official advisories.</strong> At this level, city and national authorities
+            often issue emergency measures such as school closures or construction and traffic limits. Live AQI does not
+            publish advisories, so follow your local environment or health agency.
+          </p>
+        </div>
+      )
+    }
+  </div>
+
+  <div>
+    <h3 class="font-bold">What to do now</h3>
+    <ul class="mt-4 divide-y divide-line border-y border-line">
+      {
+        advice.actions.map((a) => (
+          <li class="grid grid-cols-[minmax(0,1fr)_auto] gap-x-6 py-5">
+            <div>
+              <p class="text-sm text-subtle">{a.label}</p>
+              <p class="mt-1 text-lg font-semibold leading-snug">{a.value}</p>
+              <p class="mt-1 text-sm text-muted">{a.detail}</p>
+            </div>
+            <p class="flex items-start gap-1 pt-1.5" role="img" aria-label={`${toneText[a.tone]}, ${pips[a.tone]} of 4`}>
+              {[1, 2, 3, 4].map((n) => (
+                <span class:list={['h-3.5 w-1.5 rounded-full', n <= pips[a.tone] ? 'bg-accent' : 'bg-surface-3']} />
+              ))}
+            </p>
+          </li>
+        ))
+      }
+    </ul>
+
+    <h3 class="mt-10 font-bold">Also worth doing</h3>
+    <ul class="mt-3 space-y-2.5">
+      {
+        advice.tips.map((t) => (
+          <li class="flex gap-3 text-muted">
+            <span aria-hidden="true" class="mt-[0.6em] size-1.5 shrink-0 rounded-full bg-accent" />
+            {t}
+          </li>
+        ))
+      }
+    </ul>
+    <p class="mt-8 text-caption text-subtle">
+      General guidance from Live AQI, not medical advice or an official advisory. If you have a heart or lung condition,
+      follow the plan agreed with your doctor.
+    </p>
+  </div>
+</div>

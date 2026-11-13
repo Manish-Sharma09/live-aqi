@@ -1,0 +1,40 @@
+---
+/** Category face (decorative — the category label always accompanies it). */
+import type { CategoryFace } from '../../lib/aqi/standards';
+
+interface Props {
+  face: CategoryFace;
+  size?: number;
+  class?: string;
+}
+const { face, size = 16, class: className } = Astro.props;
+
+const mouths: Record<CategoryFace, string> = {
+  happy: '<path d="M8 13.5c1 1.6 2.4 2.4 4 2.4s3-.8 4-2.4"/>',
+  smile: '<path d="M8.6 14.2c.9 1 2 1.5 3.4 1.5s2.5-.5 3.4-1.5"/>',
+  neutral: '<path d="M8.6 15h6.8"/>',
+  frown: '<path d="M8.6 16c.9-1 2-1.5 3.4-1.5s2.5.5 3.4 1.5"/>',
+  sad: '<path d="M8 16.4c1-1.6 2.4-2.4 4-2.4s3 .8 4 2.4"/><path d="M15.6 7.4l1.4-.8M8.4 7.4 7 6.6"/>',
+  mask: '<rect x="7.2" y="12.2" width="9.6" height="5" rx="2"/><path d="M7.2 13.6 4.6 12.4M16.8 13.6l2.6-1.2"/>',
+};
+---
+
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  viewBox="0 0 24 24"
+  width={size}
+  height={size}
+  fill="none"
+  stroke="currentColor"
+  stroke-width="1.7"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class:list={['shrink-0', className]}
+  aria-hidden="true"
+  focusable="false"
+>
+  <circle cx="12" cy="12" r="9" />
+  <circle cx="9" cy="10" r="0.9" fill="currentColor" stroke="none" />
+  <circle cx="15" cy="10" r="0.9" fill="currentColor" stroke="none" />
+  <Fragment set:html={mouths[face]} />
+</svg>

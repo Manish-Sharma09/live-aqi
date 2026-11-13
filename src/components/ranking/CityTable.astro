@@ -1,0 +1,86 @@
+---
+import Icon from '../ui/Icon.astro';
+import PollutantLabel from '../aqi/PollutantLabel.astro';
+import { categoryFor, type StandardId } from '../../lib/aqi/standards';
+import { flag, formatConcentration, signed } from '../../lib/format';
+import { readingChange, readingDominant, readingValue, type CityReading } from '../../lib/services/reports';
+
+interface Props {
+  rows: CityReading[];
+  standard: StandardId;
+  caption: string;
+  showCountry?: boolean;
+  startRank?: number;
+  compact?: boolean;
+  /** Wrap in a card (off when the table already sits inside one). */
+  boxed?: boolean;
+}
+const { rows, standard, caption, showCountry = true, startRank = 1, compact = false, boxed = true } = Astro.props;
+const stdName = standard === 'in' ? 'India NAQI' : 'US AQI';
+---
+
+<div class:list={['relative overflow-x-auto', boxed && 'card px-3 py-2 sm:px-5']}>
+  <table class="data-table min-w-[36rem]">
+    <caption class="sr-only">{caption}</caption>
+    <thead>
+      <tr>
+        <th scope="col" class="w-12">#</th>
+        <th scope="col">City</th>
+        <th scope="col">{stdName}</th>
+        <th scope="col">Category</th>
+        <th scope="col" class="whitespace-nowrap">24 h change</th>
+        {!compact && <th scope="col">Primary</th>}
+        {!compact && <th scope="col" class="num">PM2.5 µg/m³</th>}
+      </tr>
+    </thead>
+    <tbody>
+      {
+        rows.map((r, i) => {
+          const v = readingValue(r, standard);
+          const cat = v !== null ? categoryFor(standard, v) : null;
+          const change = readingChange(r, standard);
+          const dom = readingDominant(r, standard);
+          return (
+            <tr>
+              <td class="font-mono text-subtle">{startRank + i}</td>
+              <td>
+                <a href={`/city/${r.city.slug}`} class="font-semibold hover:underline">
+                  {r.city.name}
+                </a>
+                {showCountry && (
+                  <span class="block text-caption text-subtle">
+                    <span aria-hidden="true">{flag(r.city.cc)} </span>
+                    {r.country}
+                  </span>
+                )}
+              </td>
+              <td>
+                {v !== null && cat ? (
+                  <span class="aqi-badge" style={`--cat:${cat.color};--cat-ink:${cat.ink}`}>
+                    {v}
+                  </span>
+                ) : (
+                  <span class="text-subtle">—</span>
+                )}
+              </td>
+              <td class="text-sm">{cat?.label ?? 'No data'}</td>
+              <td class="font-mono text-sm whitespace-nowrap">
+                {change === null ? (
+                  <span class="text-subtle">—</span>
+                ) : (
+                  <span class="inline-flex items-center gap-1" title={change > 0 ? 'Worse than 24 hours ago' : change < 0 ? 'Better than 24 hours ago' : 'Unchanged'}>
+                    {change !== 0 && <Icon name={change > 0 ? 'arrow-up' : 'arrow-down'} size={14} />}
+                    {signed(change)}
+                    <span class="sr-only">{change > 0 ? '(worse)' : change < 0 ? '(better)' : ''}</span>
+                  </span>
+                )}
+              </td>
+              {!compact && <td class="text-sm">{dom ? <PollutantLabel id={dom} /> : '—'}</td>}
+              {!compact && <td class="num type-code">{formatConcentration(r.pm25)}</td>}
+            </tr>
+          );
+        })
+      }
+    </tbody>
+  </table>
+</div>

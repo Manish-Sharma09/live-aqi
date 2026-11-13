@@ -1,0 +1,24 @@
+---
+/** Live AQI mark: a glowing sky dot, as in the app mockups. */
+interface Props {
+  size?: number;
+  withWordmark?: boolean;
+  class?: string;
+}
+const { size = 22, withWordmark = true, class: className } = Astro.props;
+---
+
+<span class:list={['inline-flex items-center gap-2.5', className]}>
+  <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="shrink-0">
+    <defs>
+      <radialGradient id="logo-dot" cx="35%" cy="30%" r="75%">
+        <stop offset="0" stop-color="#8fd0ff" />
+        <stop offset="0.55" stop-color="#3a8ef0" />
+        <stop offset="1" stop-color="#1f5fc4" />
+      </radialGradient>
+    </defs>
+    <circle cx="12" cy="12" r="11" fill="url(#logo-dot)" />
+    <circle cx="8.5" cy="8" r="2.6" fill="#fff" opacity="0.55" />
+  </svg>
+  {withWordmark && <span class="text-[1.1875rem] leading-none font-extrabold tracking-[-0.02em] whitespace-nowrap text-ink">Live AQI</span>}
+</span>

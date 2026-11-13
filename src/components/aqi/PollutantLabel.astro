@@ -1,0 +1,14 @@
+---
+/** Chemical notation with real subscripts (the brand fonts have no subscript glyphs). */
+import { POLLUTANTS } from '../../lib/aqi/pollutants';
+import type { PollutantId } from '../../lib/aqi/standards';
+
+interface Props {
+  id: PollutantId;
+  class?: string;
+}
+const { id, class: className } = Astro.props;
+const p = POLLUTANTS[id];
+---
+
+<span class={className} aria-label={p.ascii}>{p.symbol}{p.sub && <sub aria-hidden="true">{p.sub}</sub>}</span>

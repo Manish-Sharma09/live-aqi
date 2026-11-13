@@ -1,0 +1,23 @@
+---
+import FaceIcon from './FaceIcon.astro';
+import type { AqiCategory } from '../../lib/aqi/standards';
+
+interface Props {
+  category: AqiCategory;
+  size?: 'sm' | 'md';
+  class?: string;
+}
+const { category, size = 'md', class: className } = Astro.props;
+---
+
+<span
+  class:list={[
+    'inline-flex items-center gap-1.5 rounded-full font-semibold text-ink',
+    size === 'md' ? 'h-8 px-3.5 text-[0.9375rem]' : 'h-7 px-2.5 text-[0.8125rem]',
+    className,
+  ]}
+  style={`background: color-mix(in srgb, ${category.color} 30%, var(--surface)); box-shadow: inset 0 0 0 1px color-mix(in srgb, ${category.color} 45%, transparent)`}
+>
+  <FaceIcon face={category.face} size={size === 'md' ? 17 : 15} />
+  {category.label}
+</span>

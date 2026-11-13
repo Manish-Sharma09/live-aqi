@@ -1,0 +1,226 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { IN_POINTS, STANDARDS, US_BREAKPOINTS } from '../lib/aqi/standards';
+import { POLLUTANTS } from '../lib/aqi/pollutants';
+
+export const prerender = false;
+Astro.cache.set({ maxAge: 86400, swr: 604800 });
+
+const usRows = STANDARDS.us.categories.map((c, i) => ({
+  c,
+  pm25: US_BREAKPOINTS.pm25[i],
+  pm10: US_BREAKPOINTS.pm10[i],
+  o3: US_BREAKPOINTS.o3_8h[i],
+  co: US_BREAKPOINTS.co[i],
+  no2: US_BREAKPOINTS.no2[i],
+  so2: i < 4 ? US_BREAKPOINTS.so2_1h[i] : US_BREAKPOINTS.so2_24h[i - 4],
+}));
+const inRange = (p: keyof typeof IN_POINTS, i: number) => {
+  const pts = IN_POINTS[p];
+  const lo = i === 0 ? 0 : pts[i]![0];
+  const hi = pts[i + 1]?.[0];
+  return hi === undefined ? `> ${lo}` : `${i === 0 ? 0 : lo}–${hi}`;
+};
+const fmt = (s: { cLo: number; cHi: number } | undefined, d = 1) =>
+  s ? `${s.cLo.toFixed(d)}–${s.cHi.toFixed(d)}` : '—';
+
+const providers = [
+  ['Open-Meteo (CAMS)', 'Global, every location (model grid ≈11 km Europe, ≈45 km elsewhere)', 'PM2.5, PM10, O₃, NO₂, SO₂, CO (+ dust, UV)', 'Hourly values; model runs every 12–24 h', '92 days back, 5 days ahead', 'No key; free tier 10k calls/day, non-commercial', 'Paid plan for commercial use', 'Attribute CAMS and Open-Meteo'],
+  ['WAQI (aqicn.org)', '~12,000 ground stations in 100+ countries', 'Station sub-indices on the US scale (not concentrations)', 'Hourly, station-dependent', 'Not via the API (daily forecast only)', 'Free token required; generous rate limit', 'Non-commercial unless agreed', 'Attribute WAQI and originating agencies'],
+  ['OpenAQ', 'Government and research stations, uneven coverage', 'Raw concentrations', 'Hourly, station-dependent', 'Yes (per station)', 'Free key; 60 requests/min', 'Allowed with attribution', 'Attribute OpenAQ and sources'],
+  ['Google Air Quality API', 'Global', 'Indices + concentrations', 'Hourly', '30 days', 'Paid per request', 'Commercial', 'Google terms'],
+  ['CPCB (data.gov.in)', 'India only', 'Raw concentrations', 'Hourly', 'Limited', 'Free key', 'Open government licence', 'Attribute CPCB'],
+];
+---
+
+<BaseLayout
+  title="Methodology — How Live AQI Calculates Air Quality | Live AQI"
+  description="Data sources, AQI standards (US EPA and India NAQI), breakpoints, averaging rules, unit conversions, limitations and alert logic behind Live AQI."
+  canonicalPath="/methodology"
+>
+  <section class="stage">
+    <div class="shell pt-10 pb-12 lg:pt-14 lg:pb-16">
+      <h1 class="type-hero max-w-4xl">How every number on Live AQI is made</h1>
+      <p class="mt-6 max-w-2xl text-lg text-on-stage-muted">
+        Sources, standards, formulas and limits, so you can judge each reading for yourself.
+      </p>
+      <div class="mt-10 flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+        <ul class="flex flex-wrap gap-2" aria-label="Topics">
+          <li class="chip">US EPA AQI</li><li class="chip">India NAQI</li><li class="chip">CAMS</li><li class="chip">WHO 2021</li>
+        </ul>
+        <p class="byline text-sm text-on-stage-muted"><span>Updated 12 November 2026</span><span>10 min read</span></p>
+      </div>
+    </div>
+  </section>
+
+  <article class="shell py-12 lg:py-16">
+    <div class="prose-reading">
+      <h2>1. Where the data comes from</h2>
+      <p>
+        Every AQI value, pollutant concentration and trend on Live AQI is calculated from <strong>hourly pollutant
+        concentrations</strong> published by <a href="https://open-meteo.com/en/docs/air-quality-api" rel="noopener">Open-Meteo</a>,
+        which serves forecasts from the <a href="https://atmosphere.copernicus.eu/" rel="noopener">Copernicus Atmosphere
+        Monitoring Service (CAMS)</a>: the CAMS European regional ensemble (≈11 km) inside Europe and the CAMS global
+        atmospheric-composition forecast (≈45 km) elsewhere. Weather comes from Open-Meteo’s forecast API.
+      </p>
+      <p>
+        <strong>This is model data, not a sensor reading.</strong> It covers every place on Earth consistently and includes
+        history and forecasts, but it represents the average over a grid cell. Ground monitors near a busy road, a fire or
+        an industrial source can read noticeably higher or lower. When a
+        <a href="https://waqi.info/" rel="noopener">World Air Quality Index Project</a> token is configured, Live AQI also shows
+        nearby ground stations — clearly labelled and kept separate, because WAQI reports station sub-indices on the US scale
+        rather than concentrations, so the two cannot be blended.
+      </p>
+      <p>Live AQI never shows sample, estimated or placeholder values. If a provider fails, you see an error — or the last real data with its age.</p>
+
+      <h3>Providers we evaluated</h3>
+    </div>
+    <div class="relative mt-4 overflow-x-auto">
+      <table class="data-table min-w-[64rem] text-sm">
+        <caption class="sr-only">Comparison of air-quality data providers</caption>
+        <thead>
+          <tr>
+            <th scope="col">Provider</th><th scope="col">Coverage</th><th scope="col">Pollutants</th><th scope="col">Updates</th><th scope="col">History</th><th scope="col">Access &amp; limits</th><th scope="col">Commercial use</th><th scope="col">Attribution</th>
+          </tr>
+        </thead>
+        <tbody>
+          {providers.map((row) => <tr>{row.map((cell, i) => (i === 0 ? <th scope="row" class="font-semibold normal-case tracking-normal text-ink">{cell}</th> : <td>{cell}</td>))}</tr>)}
+        </tbody>
+      </table>
+    </div>
+    <div class="prose-reading mt-6">
+      <p>
+        We chose Open-Meteo/CAMS as the primary source because it is the only option that delivers raw concentrations for all
+        six index pollutants everywhere, with history and forecasts, without per-request fees — and raw concentrations are
+        what we need to compute both the US and the Indian index correctly. WAQI adds real station measurements where a token
+        is available. Note that Open-Meteo’s free tier is for non-commercial use; a commercial deployment needs an Open-Meteo
+        API key, which Live AQI supports out of the box.
+      </p>
+
+      <h2>2. Two AQI standards — never mixed</h2>
+      <p>
+        An AQI is a <em>scale</em>, not a measurement, and countries define it differently. The same air can be “Unhealthy”
+        (US AQI 151–200) or “Poor” (India NAQI 201–300). Live AQI computes both standards independently from the same
+        concentrations, labels which one you are looking at, and never compares a value from one with the other.
+        Pages for places in India default to the India NAQI; everywhere else defaults to the US AQI. Global rankings use the
+        US AQI for comparability unless you switch.
+      </p>
+
+      <h3>US EPA AQI</h3>
+      <p>
+        Follows 40 CFR Part 58 Appendix G, including the PM₂.₅ breakpoints revised by the EPA in 2024. For real-time values
+        we use the EPA’s <strong>NowCast</strong> for PM₂.₅ and PM₁₀ (a 12-hour weighted average that reacts to change; it needs 2 of
+        the 3 latest hours). Ozone uses the 8-hour average (and the 1-hour table above 0.125 ppm, whichever is higher); CO the
+        8-hour average; NO₂ and SO₂ hourly values (SO₂ above 304 ppb switches to the 24-hour table). Concentrations are
+        truncated as the EPA specifies before lookup. Values that exceed the top of the scale are shown as “500+”.
+      </p>
+    </div>
+    <div class="relative mt-4 overflow-x-auto">
+      <table class="data-table min-w-[52rem] text-sm">
+        <caption class="text-left text-caption text-subtle">US EPA breakpoints (PM in µg/m³; O₃ and CO in ppm; NO₂ and SO₂ in ppb)</caption>
+        <thead>
+          <tr><th scope="col">Category</th><th scope="col">AQI</th><th scope="col">PM2.5 (NowCast)</th><th scope="col">PM10 (NowCast)</th><th scope="col">O3 8-h</th><th scope="col">CO 8-h</th><th scope="col">NO2 1-h</th><th scope="col">SO2</th></tr>
+        </thead>
+        <tbody>
+          {
+            usRows.map((r) => (
+              <tr>
+                <td><span class="inline-flex items-center gap-2"><span class="swatch" style={`--cat:${r.c.color}`} />{r.c.label}</span></td>
+                <td class="font-mono">{r.c.max === Infinity ? `${r.c.min}–500` : `${r.c.min}–${r.c.max}`}</td>
+                <td class="font-mono">{fmt(r.pm25, 1)}</td>
+                <td class="font-mono">{fmt(r.pm10, 0)}</td>
+                <td class="font-mono">{r.o3 ? fmt(r.o3, 3) : '1-h table'}</td>
+                <td class="font-mono">{fmt(r.co, 1)}</td>
+                <td class="font-mono">{fmt(r.no2, 0)}</td>
+                <td class="font-mono">{fmt(r.so2, 0)}</td>
+              </tr>
+            ))
+          }
+        </tbody>
+      </table>
+    </div>
+
+    <div class="prose-reading mt-10">
+      <h3>India National AQI (CPCB)</h3>
+      <p>
+        Follows the Central Pollution Control Board’s National Air Quality Index. PM₂.₅, PM₁₀, NO₂ and SO₂ use <strong>24-hour
+        averages</strong> (at least 16 valid hours). O₃ and CO use 8-hour averages — we take the highest 8-hour average of the last
+        24 hours, consistent with the daily index. CO is converted to mg/m³. Each sub-index is a linear interpolation within its
+        band; the overall AQI is the highest sub-index, and it requires at least three pollutants including PM₂.₅ or PM₁₀.
+        Above the top breakpoint we extend the “Very Poor” band’s slope and cap the index at 500. NH₃ and lead are not part
+        of the global model data, so they are not included.
+      </p>
+    </div>
+    <div class="relative mt-4 overflow-x-auto">
+      <table class="data-table min-w-[52rem] text-sm">
+        <caption class="text-left text-caption text-subtle">India NAQI breakpoints (µg/m³; CO in mg/m³)</caption>
+        <thead>
+          <tr><th scope="col">Category</th><th scope="col">AQI</th><th scope="col">PM2.5 24-h</th><th scope="col">PM10 24-h</th><th scope="col">NO2 24-h</th><th scope="col">O3 8-h</th><th scope="col">CO 8-h</th><th scope="col">SO2 24-h</th></tr>
+        </thead>
+        <tbody>
+          {
+            STANDARDS.in.categories.map((c, i) => (
+              <tr>
+                <td><span class="inline-flex items-center gap-2"><span class="swatch" style={`--cat:${c.color}`} />{c.label}</span></td>
+                <td class="font-mono">{c.max === Infinity ? `${c.min}–500` : `${c.min}–${c.max}`}</td>
+                <td class="font-mono">{inRange('pm25', i)}</td>
+                <td class="font-mono">{inRange('pm10', i)}</td>
+                <td class="font-mono">{inRange('no2', i)}</td>
+                <td class="font-mono">{inRange('o3', i)}</td>
+                <td class="font-mono">{inRange('co', i)}</td>
+                <td class="font-mono">{inRange('so2', i)}</td>
+              </tr>
+            ))
+          }
+        </tbody>
+      </table>
+    </div>
+
+    <div class="prose-reading mt-10">
+      <h3>Unit conversions</h3>
+      <p>
+        The model reports every gas in µg/m³. For the US index we convert to ppb or ppm at 25 °C and 1 atm
+        (<code>ppb = µg/m³ × 24.45 ÷ molecular weight</code>; O₃ 48.00, NO₂ 46.01, SO₂ 64.07, CO 28.01 g/mol).
+      </p>
+
+      <h2>3. Guidelines shown with pollutants</h2>
+      <p>
+        Pollutant cards compare the matching average with the <strong>WHO Global Air Quality Guidelines (2021)</strong>:
+        {Object.values(POLLUTANTS).map((p, i, all) => `${p.ascii} ${p.who.value} ${p.who.unit} (${p.who.averaging})${i < all.length - 1 ? ', ' : '.'}`)}
+        For India we also show the National Ambient Air Quality Standards (2009).
+      </p>
+
+      <h2>4. Health guidance</h2>
+      <p>
+        Each category shows the authority’s own wording — the EPA/AirNow statement for the US AQI and the CPCB statement for
+        the India NAQI — clearly labelled as the official statement. Practical tips (masks, windows, purifiers) are general
+        guidance written by Live AQI and are not medical advice. Where the main pollutant is a gas such as ozone, we say so,
+        because particle respirators and HEPA purifiers do not remove gases. Live AQI does not issue emergency advisories; at
+        Very Poor/Very Unhealthy levels and above we point you to your local authorities.
+      </p>
+
+      <h2>5. Freshness and caching</h2>
+      <ul>
+        <li>Each page states the hour its values are valid for and how long ago they were fetched.</li>
+        <li>City data is refreshed hourly; world and country snapshots every few hours, with values advanced hour by hour from the model series. The underlying model updates every 12–24 hours.</li>
+        <li>If a refresh fails, we show the last real data (up to 24 hours old) and say so. We never fill gaps with estimates.</li>
+      </ul>
+
+      <h2>6. Rankings and country pages</h2>
+      <p>
+        Global rankings and the map cover about 300 cities: every city of 2.5 million people or more, plus the capital and the
+        largest city of every country with at least a million people. Country pages cover each country’s 30 most populous
+        cities (20 per region). A country’s headline value is the <em>median</em> of those cities — not an official national index.
+        Place data comes from <a href="https://www.geonames.org/" rel="noopener">GeoNames</a> (CC BY 4.0).
+      </p>
+
+      <h2>7. How alerts decide to notify you</h2>
+      <ul>
+        <li>An alert fires when the reading first reaches your chosen category, and again only if it escalates to a worse category.</li>
+        <li>With severe alerts on, the worst category (Hazardous / Severe) always triggers a high-priority alert.</li>
+        <li>An improvement alert needs the reading to stay below your level across at least two hourly readings, so values hovering at a boundary don’t flip-flop.</li>
+        <li>Background notifications are checked every 30 minutes; the same rules power in-page alerts.</li>
+      </ul>
+    </div>
+  </article>
+</BaseLayout>

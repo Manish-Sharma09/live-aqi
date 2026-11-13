@@ -1,0 +1,28 @@
+{
+  "name": "Live AQI — Real-time air quality",
+  "short_name": "Live AQI",
+  "description": "Real-time air quality, health guidance and pollution alerts for every city.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#e6ecf4",
+  "theme_color": "#e6ecf4",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

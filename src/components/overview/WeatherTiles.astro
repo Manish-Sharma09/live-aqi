@@ -1,0 +1,83 @@
+---
+import Icon, { type IconName } from '../ui/Icon.astro';
+import { formatNumber } from '../../lib/format';
+import { describeWeatherCode, type Weather } from '../../lib/services/open-meteo';
+
+interface Props {
+  weather: Weather | null;
+  /** 'glass' = compact tiles inside the AQI card (phones); 'card' = standalone cards (desktop). */
+  variant: 'glass' | 'card';
+  class?: string;
+}
+const { weather: w, variant, class: className } = Astro.props;
+
+function conditionIcon(code: number | null, isDay: boolean): IconName {
+  if (code === null) return isDay ? 'sun' : 'moon';
+  if (code === 0 || code === 1) return isDay ? 'sun' : 'moon';
+  if (code <= 3) return 'cloud';
+  if (code === 45 || code === 48) return 'fog';
+  if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82)) return 'rain';
+  if ((code >= 71 && code <= 77) || code === 85 || code === 86) return 'snow';
+  if (code >= 95) return 'bolt';
+  return 'cloud';
+}
+
+const tiles = [
+  {
+    icon: w ? conditionIcon(w.weatherCode, w.isDay) : ('thermometer' as IconName),
+    cardIcon: 'thermometer' as IconName,
+    label: 'Temperature',
+    value: w ? `${formatNumber(w.temperature, 0)}°` : '—',
+    unit: '',
+    sub: w ? describeWeatherCode(w.weatherCode) : 'Unavailable',
+  },
+  {
+    icon: 'wind' as IconName,
+    cardIcon: 'wind' as IconName,
+    label: 'Wind',
+    value: w ? formatNumber(w.windSpeed, 1) : '—',
+    unit: w ? 'km/h' : '',
+    sub: 'Wind',
+  },
+  {
+    icon: 'droplet' as IconName,
+    cardIcon: 'droplet' as IconName,
+    label: 'Humidity',
+    value: w ? `${formatNumber(w.humidity, 0)}%` : '—',
+    unit: '',
+    sub: 'Humidity',
+  },
+];
+---
+
+{
+  variant === 'glass' ? (
+    <ul class:list={['grid grid-cols-3 gap-2.5', className]} aria-label="Weather now">
+      {tiles.map((t) => (
+        <li class="glass-tile flex flex-col items-center px-2 py-3.5 text-center">
+          <Icon name={t.icon} size={18} class="text-ink-2" />
+          <span class="mt-2 text-lg leading-none font-bold tracking-[-0.02em]">
+            {t.value}
+            {t.unit && <span class="ml-0.5 text-[0.6875rem] font-semibold text-ink-3">{t.unit}</span>}
+          </span>
+          <span class="mt-1.5 text-xs text-ink-3">{t.sub}</span>
+        </li>
+      ))}
+    </ul>
+  ) : (
+    <ul class:list={['grid grid-cols-3 gap-4', className]} aria-label="Weather now">
+      {tiles.map((t) => (
+        <li class="card flex items-center gap-3.5 px-5 py-4">
+          <Icon name={t.cardIcon} size={30} class="shrink-0 text-ink-2" />
+          <span class="min-w-0">
+            <span class="block text-sm text-ink-3">{t.label}</span>
+            <span class="block text-[1.625rem] leading-tight font-bold tracking-[-0.02em]">
+              {t.value}
+              {t.unit && <span class="ml-1 text-base font-semibold">{t.unit}</span>}
+            </span>
+          </span>
+        </li>
+      ))}
+    </ul>
+  )
+}

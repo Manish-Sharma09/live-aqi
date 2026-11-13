@@ -1,0 +1,131 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PlaceDashboard from '../../components/aqi/PlaceDashboard.astro';
+import Icon from '../../components/ui/Icon.astro';
+import { defaultStandardFor, isStandardId } from '../../lib/aqi/standards';
+import { getCountry } from '../../lib/geo/places';
+import { loadDashboard } from '../../lib/services/dashboard';
+import { resolveCitySlug } from '../../lib/services/reports';
+import { skyTheme } from '../../lib/theme';
+
+export const prerender = false;
+
+const slug = Astro.params.slug ?? '';
+const resolved = await resolveCitySlug(slug);
+if (!resolved) return Astro.rewrite('/404');
+if ('redirect' in resolved) return Astro.redirect(`${resolved.redirect}${Astro.url.search}`, 301);
+
+const { place } = resolved;
+const stdParam = Astro.url.searchParams.get('std');
+const standard = isStandardId(stdParam) ? stdParam : defaultStandardFor(place.cc);
+const data = await loadDashboard(place);
+const result = data.report?.current.aqi[standard] ?? null;
+
+// Successful renders are cached at the edge briefly; errors are never cached.
+if (data.report) Astro.cache.set({ maxAge: 600, swr: 1800, tags: ['city'] });
+
+const country = getCountry(place.cc);
+const where = [place.region, place.country].filter(Boolean).join(', ');
+const stdName = standard === 'in' ? 'India NAQI' : 'US AQI';
+const title = `${place.name} Air Quality Index (AQI) — Live PM2.5 & Pollution | Live AQI`;
+const description = result
+  ? `Live air quality in ${place.name}, ${where}: ${stdName} ${result.aqi} (${result.category.label}). Real-time PM2.5, PM10, hourly trends, health advice and pollution alerts.`
+  : `Live air quality in ${place.name}, ${where}: real-time AQI, PM2.5, PM10, hourly trends, health advice and pollution alerts.`;
+const canonicalPath = `/city/${place.slug}`;
+const site = Astro.site!.href.replace(/\/$/, '');
+
+const jsonLd = [
+  {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Live AQI', item: `${site}/` },
+      ...(country ? [{ '@type': 'ListItem', position: 2, name: country.name, item: `${site}/country/${country.slug}` }] : []),
+      { '@type': 'ListItem', position: country ? 3 : 2, name: place.name, item: `${site}${canonicalPath}` },
+    ],
+  },
+  {
+    '@context': 'https://schema.org',
+    '@type': 'WebPage',
+    name: title,
+    url: `${site}${canonicalPath}`,
+    description,
+    about: {
+      '@type': 'Place',
+      name: `${place.name}, ${place.country}`,
+      geo: { '@type': 'GeoCoordinates', latitude: place.lat, longitude: place.lon },
+    },
+  },
+];
+---
+
+<BaseLayout
+  title={title}
+  description={description}
+  canonicalPath={canonicalPath}
+  jsonLd={jsonLd}
+  theme={skyTheme(place, data.weather?.weather)}
+  currentPlace={{ name: place.name }}
+>
+  <PlaceDashboard data={data} standard={standard} shareUrl={`${site}${canonicalPath}`}>
+    <nav slot="top" aria-label="Breadcrumb">
+      <ol class="flex flex-wrap items-center gap-2 text-sm text-ink-3">
+        <li><a href="/" class="hover:text-ink hover:underline">Live AQI</a></li>
+        {
+          country && (
+            <>
+              <li aria-hidden="true">/</li>
+              <li>
+                <a href={`/country/${country.slug}`} class="hover:text-ink hover:underline">
+                  {country.name}
+                </a>
+              </li>
+            </>
+          )
+        }
+        <li aria-hidden="true">/</li>
+        <li aria-current="page" class="font-semibold text-ink-2">{place.name}</li>
+      </ol>
+    </nav>
+    <Fragment slot="utility">
+      <button
+        type="button"
+        class="btn btn-secondary"
+        data-save-location
+        data-token={`s:${place.slug}`}
+        data-name={place.name}
+        data-subtitle={where}
+        data-href={canonicalPath}
+        title="Set as my location"
+      >
+        <Icon name="pin" size={17} />
+        <span data-save-label>Set as my location</span>
+      </button>
+      <a href={`/alerts?loc=${encodeURIComponent(`s:${place.slug}`)}`} class="btn btn-primary">
+        <Icon name="bell" size={17} />
+        Get alerts
+      </a>
+    </Fragment>
+  </PlaceDashboard>
+</BaseLayout>
+
+<script>
+  import { getSavedLocation, saveLocation } from '../../scripts/store';
+
+  const btn = document.querySelector<HTMLButtonElement>('[data-save-location]');
+  if (btn) {
+    const label = btn.querySelector('[data-save-label]')!;
+    const sync = () => {
+      const isSaved = getSavedLocation()?.token === btn.dataset.token;
+      label.textContent = isSaved ? 'Saved as my location' : 'Set as my location';
+      btn.title = label.textContent;
+      btn.setAttribute('aria-pressed', String(isSaved));
+    };
+    sync();
+    btn.addEventListener('click', () => {
+      const d = btn.dataset;
+      saveLocation({ token: d.token!, name: d.name!, subtitle: d.subtitle, href: d.href, precise: false });
+      sync();
+    });
+  }
+</script>

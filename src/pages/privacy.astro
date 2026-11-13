@@ -1,0 +1,70 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+export const prerender = false;
+Astro.cache.set({ maxAge: 86400, swr: 604800 });
+---
+
+<BaseLayout
+  title="Privacy Policy — Live AQI"
+  description="How Live AQI handles your location, alert settings and notification data: what we collect, why, how long we keep it and your choices."
+  canonicalPath="/privacy"
+>
+  <section class="stage">
+    <div class="shell pt-10 pb-12 lg:pt-14 lg:pb-16">
+      <h1 class="type-hero max-w-4xl">Your location stays yours.</h1>
+      <p class="mt-6 max-w-2xl text-lg text-on-stage-muted">
+        Live AQI works without an account. We collect the minimum needed to show air quality where you are and to send the
+        alerts you ask for.
+      </p>
+    </div>
+  </section>
+
+  <article class="shell py-12 lg:py-16">
+    <div class="prose-reading">
+      <p class="text-sm text-subtle">Last updated 12 November 2026</p>
+
+      <h2>Location</h2>
+      <ul>
+        <li><strong>Device location</strong> is used only if you choose “Use my location” and allow it in your browser. Your coordinates are rounded to about 1 km, matched to the nearest place, and saved on your device (local storage and a first-party cookie, <code>laqi_loc</code>) so your dashboard opens on the right place next time.</li>
+        <li><strong>Approximate location</strong>: before you choose a location, our hosting provider (Cloudflare) supplies an approximate city derived from your IP address, which we use only to pick a nearby default dashboard. It is not stored.</li>
+        <li>You can change or clear your location at any time from the homepage, or by clearing this site’s data in your browser.</li>
+      </ul>
+
+      <h2>Alerts</h2>
+      <ul>
+        <li><strong>In-page alerts</strong> run entirely in your browser; settings and the last reading seen are kept in local storage.</li>
+        <li>
+          <strong>Background notifications</strong>: if you turn them on, we store your browser’s push subscription address, the location you chose to
+          watch (as a place name or rounded coordinates), your alert settings, and the last alert state — nothing else. This is kept until you turn
+          notifications off, or until your browser’s push service reports the subscription has expired.
+        </li>
+      </ul>
+
+      <h2>Searches and requests</h2>
+      <p>
+        Searches are sent to our server to find matching places. To look up smaller towns we query Open-Meteo’s geocoding
+        service with the search text only — never your location or identity. Air-quality requests to our providers contain
+        place coordinates, not information about you. Our hosting provider keeps standard, short-lived request logs for
+        security and reliability.
+      </p>
+
+      <h2>What we don’t do</h2>
+      <ul>
+        <li>No accounts, no advertising trackers, and no sale or sharing of personal data.</li>
+        <li>No third-party analytics cookies.</li>
+      </ul>
+
+      <h2>Third parties</h2>
+      <ul>
+        <li><strong>Cloudflare</strong> hosts the site and stores alert subscriptions.</li>
+        <li><strong>Open-Meteo</strong> provides air-quality, weather and geocoding data.</li>
+        <li><strong>OpenFreeMap</strong> serves map tiles on the map page (your browser requests tiles for the area you view).</li>
+        <li>Your browser’s <strong>push service</strong> (Google, Mozilla, Apple or Microsoft) delivers notifications you enable.</li>
+      </ul>
+
+      <h2>Contact</h2>
+      <p>Questions about privacy: <a href="mailto:privacy@live-aqi.com">privacy@live-aqi.com</a>.</p>
+    </div>
+  </article>
+</BaseLayout>

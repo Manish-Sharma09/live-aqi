@@ -1,0 +1,100 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import CityTable from '../components/ranking/CityTable.astro';
+import StandardSwitch from '../components/aqi/StandardSwitch.astro';
+import ErrorState from '../components/ui/ErrorState.astro';
+import { isStandardId } from '../lib/aqi/standards';
+import { CONTINENTS, type ContinentCode, getCountry } from '../lib/geo/places';
+import { formatHour, relativeTime } from '../lib/format';
+import { describeError } from '../lib/services/http';
+import { getWorldSnapshot, readingValue, type Snapshot } from '../lib/services/reports';
+
+export const prerender = false;
+
+const q = Astro.url.searchParams;
+const view = q.get('view') === 'clean' ? 'clean' : 'polluted';
+const standard = isStandardId(q.get('std')) ? (q.get('std') as 'us' | 'in') : 'us';
+const regionParam = (q.get('region') ?? 'all').toUpperCase();
+const region = regionParam in CONTINENTS && regionParam !== 'AN' ? (regionParam as ContinentCode) : null;
+
+let snapshot: Snapshot | null = null;
+let error: string | null = null;
+try {
+  snapshot = await getWorldSnapshot();
+  Astro.cache.set({ maxAge: 600, swr: 1800 });
+} catch (err) {
+  error = describeError(err);
+}
+
+const rows = (snapshot?.readings ?? [])
+  .filter((r) => readingValue(r, standard) !== null)
+  .filter((r) => !region || getCountry(r.city.cc)?.continent === region)
+  .sort((a, b) => (view === 'polluted' ? readingValue(b, standard)! - readingValue(a, standard)! : readingValue(a, standard)! - readingValue(b, standard)!))
+  .slice(0, 50);
+
+const link = (patch: Record<string, string | null>) => {
+  const p = new URLSearchParams(Astro.url.search);
+  for (const [k, v] of Object.entries(patch)) (v === null ? p.delete(k) : p.set(k, v));
+  const s = p.toString();
+  return `/rankings${s ? `?${s}` : ''}`;
+};
+const regionName = region ? CONTINENTS[region] : 'the world';
+const heading = view === 'polluted' ? `Most polluted cities in ${regionName}` : `Cleanest cities in ${regionName}`;
+---
+
+<BaseLayout
+  title={`${view === 'polluted' ? 'Most Polluted' : 'Cleanest'} Cities ${region ? `in ${CONTINENTS[region]}` : 'in the World'} Right Now — Live AQI Ranking | Live AQI`}
+  description={`Live ranking of the ${view === 'polluted' ? 'most polluted' : 'cleanest'} major cities ${region ? `in ${CONTINENTS[region]}` : 'worldwide'} by air quality index, with PM2.5, primary pollutant and 24-hour change.`}
+  canonicalPath="/rankings"
+>
+  <section class="stage">
+    <div class="shell pt-10 pb-12 lg:pt-14 lg:pb-16">
+      <h1 class="type-hero max-w-5xl">{heading}</h1>
+      <p class="mt-5 max-w-2xl text-on-stage-muted">
+        Ranked by the current {standard === 'in' ? 'India NAQI' : 'US AQI'} across the world’s major cities. Every value comes
+        from live model data — nothing is estimated or filled in.
+      </p>
+
+      <div class="mt-10 flex flex-wrap items-center gap-3">
+        <nav class="seg" aria-label="Ranking">
+          <a href={link({ view: null })} aria-current={view === 'polluted' ? 'page' : undefined}>Most polluted</a>
+          <a href={link({ view: 'clean' })} aria-current={view === 'clean' ? 'page' : undefined}>Cleanest</a>
+        </nav>
+        <StandardSwitch current={standard} path="/rankings" />
+      </div>
+      <nav class="mt-3 flex flex-wrap gap-2" aria-label="Region">
+        {
+          [['all', 'World'], ...Object.entries(CONTINENTS).filter(([k]) => k !== 'AN')].map(([code, name]) => (
+            <a
+              href={link({ region: code === 'all' ? null : code })}
+              aria-current={(code === 'all' && !region) || code === region ? 'page' : undefined}
+              class="inline-flex h-9 items-center rounded-full border border-line bg-surface px-3.5 text-sm font-semibold text-ink-2 transition-colors hover:text-ink aria-[current=page]:border-transparent aria-[current=page]:bg-accent-soft aria-[current=page]:text-accent-ink"
+            >
+              {name}
+            </a>
+          ))
+        }
+      </nav>
+    </div>
+  </section>
+
+  <section class="shell py-12 lg:py-16" aria-label={heading}>
+    {
+      error ? (
+        <ErrorState title="Rankings are temporarily unavailable" message={`${error} Please try again in a few minutes.`} retryHref={Astro.url.pathname + Astro.url.search} />
+      ) : rows.length === 0 ? (
+        <p class="text-muted">No cities in this region are reporting right now.</p>
+      ) : (
+        <>
+          <CityTable rows={rows} standard={standard} caption={heading} />
+          <p class="mt-6 max-w-3xl text-caption text-subtle">
+            Showing {rows.length} cities, valid {formatHour(snapshot!.validTime, 'UTC')} UTC, fetched{' '}
+            {relativeTime(snapshot!.fetchedAt)}. The 24-hour change compares with the same hour yesterday. Rankings cover the
+            world’s largest cities plus every national capital and largest city. Values are modelled (CAMS) and can differ
+            from local ground stations. <a class="link" href="/methodology">Read the methodology</a>
+          </p>
+        </>
+      )
+    }
+  </section>
+</BaseLayout>

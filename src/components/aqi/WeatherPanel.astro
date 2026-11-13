@@ -1,0 +1,82 @@
+---
+import Icon from '../ui/Icon.astro';
+import { compassPoint, formatHour, formatNumber, relativeTime } from '../../lib/format';
+import { describeWeatherCode, type Weather } from '../../lib/services/open-meteo';
+
+interface Props {
+  weather: { weather: Weather; fetchedAt: number } | null;
+  timezone: string;
+  pm25?: number | undefined;
+}
+
+const { weather, timezone, pm25 } = Astro.props;
+const w = weather?.weather;
+
+const notes: string[] = [];
+if (w) {
+  if (w.windSpeed !== null && w.windSpeed < 6) notes.push('Light winds let pollution build up near the ground.');
+  else if (w.windSpeed !== null && w.windSpeed >= 20) notes.push('Strong winds help clear local pollution but can lift dust.');
+  if (w.humidity !== null && w.humidity >= 85 && (pm25 ?? 0) >= 35) notes.push('High humidity makes fine particles swell, so haze looks thicker.');
+  if (w.uvIndex !== null && w.uvIndex >= 6) notes.push('Strong sunshine speeds up ozone formation in the afternoon.');
+}
+const items = w
+  ? [
+      { label: 'Feels like', value: formatNumber(w.feelsLike, 0), unit: '°C' },
+      { label: 'Humidity', value: formatNumber(w.humidity, 0), unit: '%' },
+      { label: 'Wind', value: formatNumber(w.windSpeed, 0), unit: `km/h ${compassPoint(w.windDirection)}`, dir: w.windDirection },
+      { label: 'Gusts', value: formatNumber(w.windGusts, 0), unit: 'km/h' },
+      { label: 'Pressure', value: formatNumber(w.pressure, 0), unit: 'hPa' },
+      { label: 'UV index', value: formatNumber(w.uvIndex, 1), unit: '' },
+    ]
+  : [];
+---
+
+{
+  !w ? (
+    <div class="flex items-start gap-3 rounded-ui bg-pale p-5">
+      <Icon name="info" class="mt-0.5 text-subtle" />
+      <p class="text-muted">Weather is unavailable for this location right now. Air-quality readings are not affected.</p>
+    </div>
+  ) : (
+    <div class="utility-card grid gap-10 p-6 sm:p-8 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:gap-14">
+      <div>
+        <p class="flex items-start gap-1">
+          <span class="text-[clamp(4rem,9vw,5.5rem)] leading-[0.85] font-bold tracking-[-0.05em] [font-stretch:115%]">
+            {formatNumber(w.temperature, 0)}
+          </span>
+          <span class="mt-2 text-2xl font-bold">°C</span>
+        </p>
+        <p class="mt-5 text-lg font-semibold">{describeWeatherCode(w.weatherCode)}</p>
+        <p class="mt-1 text-sm text-subtle">
+          For {formatHour(w.time, timezone)} local time, updated {relativeTime(weather!.fetchedAt)}
+        </p>
+        {notes.length > 0 && (
+          <ul class="mt-8 space-y-2.5">
+            {notes.map((n) => (
+              <li class="flex gap-2.5 text-sm text-muted">
+                <Icon name="wind" size={16} class="mt-0.5 shrink-0 text-subtle" />
+                {n}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+      <dl class="grid grid-cols-2 gap-x-8 gap-y-8 self-center sm:grid-cols-3">
+        {items.map((it) => (
+          <div>
+            <dt class="text-sm text-subtle">{it.label}</dt>
+            <dd class="mt-1.5 flex items-baseline gap-1.5">
+              {'dir' in it && it.dir !== null && it.dir !== undefined && (
+                <span class="inline-block self-center text-subtle" style={`transform: rotate(${(it.dir + 180) % 360}deg)`} aria-hidden="true">
+                  <Icon name="arrow-up" size={16} />
+                </span>
+              )}
+              <span class="type-code text-2xl">{it.value}</span>
+              <span class="text-sm text-subtle">{it.unit}</span>
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  )
+}

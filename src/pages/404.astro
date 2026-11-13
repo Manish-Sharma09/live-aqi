@@ -1,0 +1,26 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import LocationSearch from '../components/search/LocationSearch.astro';
+
+export const prerender = false;
+Astro.response.status = 404;
+---
+
+<BaseLayout title="Page not found — Live AQI" description="This page doesn't exist. Search for a city to see its live air quality." noindex>
+  <section class="stage flex-1">
+    <div class="shell pt-14 pb-24 lg:pt-20">
+      <p class="type-code text-on-stage-faint">Error 404</p>
+      <h1 class="type-hero mt-4 max-w-3xl">We couldn’t find that place.</h1>
+      <p class="mt-6 max-w-xl text-lg text-on-stage-muted">
+        The page may have moved, or the city name may be spelled differently. Search for it instead:
+      </p>
+      <div class="mt-8 max-w-xl">
+        <LocationSearch id="notfound-search" tone="dark" mode="navigate" />
+      </div>
+      <div class="mt-10 flex flex-wrap gap-3">
+        <a href="/" class="btn btn-primary">Go to your dashboard</a>
+        <a href="/rankings" class="btn btn-ghost-dark">City rankings</a>
+      </div>
+    </div>
+  </section>
+</BaseLayout>

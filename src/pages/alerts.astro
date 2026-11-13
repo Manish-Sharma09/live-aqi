@@ -1,0 +1,372 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import LocationSearch from '../components/search/LocationSearch.astro';
+import Icon from '../components/ui/Icon.astro';
+import { LEVEL_LABELS } from '../lib/aqi/alert-copy';
+import { push } from '../lib/config';
+import { kvStore } from '../lib/push/subscriptions';
+import { resolveLocationToken } from '../lib/services/reports';
+
+export const prerender = false;
+
+// Optional ?loc= from a city page's "Alerts for …" button.
+const locParam = Astro.url.searchParams.get('loc');
+const initialPlace = locParam ? await resolveLocationToken(locParam).catch(() => null) : null;
+const initialLocation = initialPlace && locParam ? { token: locParam, name: initialPlace.name } : null;
+const pushReady = push.enabled && Boolean(kvStore());
+---
+
+<BaseLayout
+  title="Air Quality Alerts & Notifications — Live AQI"
+  description="Get notified when air pollution at your location crosses the level you choose. Background notifications, severe-pollution and improvement alerts, with thresholds you control."
+  canonicalPath="/alerts"
+>
+  <section class="stage">
+    <div class="shell pt-10 pb-12 lg:pt-14 lg:pb-16">
+      <h1 class="type-hero max-w-4xl">Know when the air turns bad.</h1>
+      <p class="mt-6 max-w-2xl text-lg text-on-stage-muted">
+        Choose a place and a level. Live AQI tells you when the air there crosses it — and, if you like, when it recovers.
+      </p>
+    </div>
+  </section>
+
+  <div
+    class="shell grid gap-12 py-12 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] lg:gap-16 lg:py-16"
+    data-alerts
+    data-vapid={push.publicKey ?? ''}
+    data-push-ready={String(pushReady)}
+    data-initial-location={initialLocation ? JSON.stringify(initialLocation) : ''}
+    data-level-labels={JSON.stringify(LEVEL_LABELS)}
+  >
+    <form data-alert-form class="space-y-10" novalidate>
+      <fieldset>
+        <legend class="flex items-baseline gap-3 font-bold"><span class="type-code text-subtle">1</span>Location to watch</legend>
+        <div class="mt-3 flex flex-wrap items-center gap-3 rounded-ui bg-pale p-4">
+          <Icon name="pin" />
+          <p class="min-w-0 flex-1">
+            <span data-loc-name class="font-semibold">No location chosen yet</span>
+            <span data-loc-hint class="block text-sm text-subtle">Search below, or set a location on the dashboard.</span>
+          </p>
+        </div>
+        <div class="mt-3">
+          <LocationSearch id="alert-location" mode="event" label="Choose a location for alerts" placeholder="Search a city to watch" />
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend class="flex items-baseline gap-3 font-bold"><span class="type-code text-subtle">2</span>AQI standard</legend>
+        <div class="mt-3 grid gap-2 sm:grid-cols-3">
+          {
+            [
+              ['auto', 'Automatic', 'India NAQI in India, US AQI elsewhere'],
+              ['us', 'US AQI', 'US EPA categories'],
+              ['in', 'India NAQI', 'CPCB categories'],
+            ].map(([value, label, hint]) => (
+              <label class="flex cursor-pointer gap-3 rounded-ui border border-line p-3 has-checked:border-accent has-checked:bg-accent-soft">
+                <input type="radio" name="standard" value={value} class="mt-1 accent-black" />
+                <span>
+                  <span class="block font-semibold">{label}</span>
+                  <span class="block text-sm text-subtle">{hint}</span>
+                </span>
+              </label>
+            ))
+          }
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend class="flex items-baseline gap-3 font-bold"><span class="type-code text-subtle">3</span>Alert me when the air reaches</legend>
+        <div class="mt-3 divide-y divide-line border-y border-line" data-thresholds>
+          {
+            [1, 2, 3, 4, 5].map((lvl) => (
+              <label class="flex cursor-pointer items-center gap-3 py-3">
+                <input type="radio" name="threshold" value={lvl} class="accent-black" />
+                <span class="flex-1">
+                  <span data-threshold-label={lvl} class="font-semibold">{LEVEL_LABELS.us[lvl]}</span>
+                  <span class="text-subtle"> or worse</span>
+                </span>
+                <span class="font-mono text-xs text-subtle">level {lvl + 1}/6</span>
+              </label>
+            ))
+          }
+          <label class="flex cursor-pointer items-center gap-3 py-3">
+            <input type="radio" name="threshold" value="6" class="accent-black" />
+            <span class="flex-1">
+              <span class="font-semibold">Only severe pollution</span>
+              <span class="block text-sm text-subtle">No threshold alerts — just the worst category (needs severe alerts on).</span>
+            </span>
+          </label>
+        </div>
+      </fieldset>
+
+      <fieldset class="space-y-3">
+        <legend class="flex items-baseline gap-3 font-bold"><span class="type-code text-subtle">4</span>Preferences</legend>
+        {
+          [
+            ['severe', 'Severe pollution alerts', 'Always alert, as high priority, when the air reaches the worst category (Hazardous / Severe).'],
+            ['improve', 'Improvement alerts', 'Tell me when the air recovers below my alert level for at least two hourly readings.'],
+            ['inPage', 'In-page alerts', 'Show an on-screen alert while a Live AQI page is open and the reading changes.'],
+          ].map(([name, label, hint]) => (
+            <label class="flex cursor-pointer gap-3 rounded-ui border border-line bg-surface p-4 has-checked:border-accent">
+              <input type="checkbox" name={name} class="mt-1 size-4 accent-black" />
+              <span>
+                <span class="block font-semibold">{label}</span>
+                <span class="block text-sm text-subtle">{hint}</span>
+              </span>
+            </label>
+          ))
+        }
+      </fieldset>
+
+      <div class="flex flex-wrap items-center gap-3">
+        <button type="submit" class="btn btn-ink">Save alert settings</button>
+        <p data-form-status role="status" aria-live="polite" class="text-sm text-subtle"></p>
+      </div>
+    </form>
+
+    <aside class="space-y-8 lg:sticky lg:top-24 lg:self-start" aria-labelledby="push-title">
+      <div class="stage rounded-ui p-6">
+        <h2 id="push-title" class="type-title text-[1.75rem]">Alerts even when Live AQI is closed</h2>
+        <p class="mt-3 text-sm text-on-stage-muted">
+          Your browser receives a notification when the air at your location crosses your level. Live AQI checks every 30
+          minutes and only notifies you when the category actually changes — never twice for the same situation.
+        </p>
+
+        <div class="mt-5 rounded-ui border border-stage-line p-4">
+          <p class="text-sm text-on-stage-faint">Status</p>
+          <p data-push-status class="mt-2 text-sm">Checking your browser…</p>
+        </div>
+
+        <div class="mt-5 flex flex-wrap gap-2">
+          <button type="button" data-push-enable class="btn btn-primary" hidden>
+            <Icon name="bell" size={17} /> Turn on notifications
+          </button>
+          <button type="button" data-push-test class="btn btn-ghost-dark" hidden>Send a test</button>
+          <button type="button" data-push-disable class="btn btn-ghost-dark" hidden>Turn off</button>
+        </div>
+        <p class="mt-4 text-caption text-on-stage-faint">
+          When you turn this on, your browser asks for permission. We store only your browser’s push address, your chosen
+          location and these settings. Turn it off at any time. <a class="link" href="/privacy">Privacy</a>
+        </p>
+      </div>
+
+      <div class="rounded-ui border border-line p-6">
+        <h2 class="font-bold">How alerts work</h2>
+        <ul class="mt-4 space-y-4 text-sm text-muted">
+          <li class="flex gap-3">
+            <Icon name="bell" class="mt-0.5 text-ink" />
+            <span><strong class="text-ink">Background notifications</strong> are delivered by your browser’s push service, even when no Live AQI page is open.</span>
+          </li>
+          <li class="flex gap-3">
+            <Icon name="info" class="mt-0.5 text-ink" />
+            <span><strong class="text-ink">In-page alerts</strong> appear on screen only while you have Live AQI open. They are not system notifications.</span>
+          </li>
+          <li class="flex gap-3">
+            <Icon name="alert" class="mt-0.5 text-ink" />
+            <span>Alerts are general information based on modelled data — not official emergency warnings. Always follow local authorities.</span>
+          </li>
+        </ul>
+      </div>
+    </aside>
+  </div>
+</BaseLayout>
+
+<script>
+  import { alertLocation, getAlertSettings, saveAlertSettings, type AlertSettings, type ThresholdLevel } from '../scripts/store';
+
+  const root = document.querySelector<HTMLElement>('[data-alerts]')!;
+  const form = root.querySelector<HTMLFormElement>('[data-alert-form]')!;
+  const formStatus = root.querySelector<HTMLElement>('[data-form-status]')!;
+  const pushStatus = root.querySelector<HTMLElement>('[data-push-status]')!;
+  const btnEnable = root.querySelector<HTMLButtonElement>('[data-push-enable]')!;
+  const btnDisable = root.querySelector<HTMLButtonElement>('[data-push-disable]')!;
+  const btnTest = root.querySelector<HTMLButtonElement>('[data-push-test]')!;
+  const vapidKey = root.dataset.vapid ?? '';
+  const pushReady = root.dataset.pushReady === 'true';
+  const levelLabels = JSON.parse(root.dataset.levelLabels!) as Record<'us' | 'in', string[]>;
+
+  let settings: AlertSettings = getAlertSettings();
+  const initial = root.dataset.initialLocation ? (JSON.parse(root.dataset.initialLocation) as { token: string; name: string }) : null;
+  let location_ = initial ?? alertLocation(settings);
+
+  // ------------------------------------------------------------- form state
+  function renderLocation() {
+    root.querySelector('[data-loc-name]')!.textContent = location_ ? location_.name : 'No location chosen yet';
+    root.querySelector('[data-loc-hint]')!.textContent = location_
+      ? initial && !settings.location
+        ? 'From the city page — save to start watching it.'
+        : 'Alerts watch this location.'
+      : 'Search below, or set a location on the dashboard.';
+  }
+  function renderThresholdLabels() {
+    const std = (form.elements.namedItem('standard') as RadioNodeList).value as 'auto' | 'us' | 'in';
+    const set = std === 'in' ? levelLabels.in : levelLabels.us;
+    root.querySelectorAll<HTMLElement>('[data-threshold-label]').forEach((el) => {
+      const lvl = Number(el.dataset.thresholdLabel);
+      el.textContent = std === 'auto' ? `${levelLabels.us[lvl]} / ${levelLabels.in[lvl]}` : set[lvl]!;
+    });
+  }
+  function fillForm() {
+    (form.elements.namedItem('standard') as RadioNodeList).value = settings.standard;
+    (form.elements.namedItem('threshold') as RadioNodeList).value = String(settings.threshold);
+    for (const k of ['severe', 'improve', 'inPage'] as const) (form.elements.namedItem(k) as HTMLInputElement).checked = settings[k];
+    renderLocation();
+    renderThresholdLabels();
+  }
+  function readForm(): AlertSettings {
+    return {
+      standard: (form.elements.namedItem('standard') as RadioNodeList).value as AlertSettings['standard'],
+      threshold: Number((form.elements.namedItem('threshold') as RadioNodeList).value) as ThresholdLevel,
+      severe: (form.elements.namedItem('severe') as HTMLInputElement).checked,
+      improve: (form.elements.namedItem('improve') as HTMLInputElement).checked,
+      inPage: (form.elements.namedItem('inPage') as HTMLInputElement).checked,
+      location: location_ ?? undefined,
+    };
+  }
+  form.addEventListener('change', (e) => {
+    if ((e.target as HTMLInputElement).name === 'standard') renderThresholdLabels();
+  });
+  root.addEventListener('laqi:search-select', (e) => {
+    const r = (e as CustomEvent<{ loc?: string; title: string }>).detail;
+    if (!r.loc) {
+      formStatus.textContent = 'Choose a city or town — countries and regions can’t be watched.';
+      return;
+    }
+    location_ = { token: r.loc, name: r.title };
+    renderLocation();
+    formStatus.textContent = `${r.title} selected — save to apply.`;
+  });
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const next = readForm();
+    if (next.threshold === 6 && !next.severe) {
+      formStatus.textContent = '“Only severe pollution” needs severe alerts turned on.';
+      return;
+    }
+    if (!next.location) {
+      formStatus.textContent = 'Choose a location to watch first.';
+      return;
+    }
+    settings = next;
+    saveAlertSettings(settings);
+    formStatus.textContent = 'Saved.';
+    const sub = await currentSubscription();
+    if (sub) {
+      const ok = await syncSubscription(sub);
+      formStatus.textContent = ok ? 'Saved — background notifications updated.' : 'Saved on this device, but background notifications could not be updated. Try again.';
+    }
+    renderLocation();
+  });
+
+  // ---------------------------------------------------------- push support
+  const supported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const standalone = window.matchMedia('(display-mode: standalone)').matches || (navigator as Navigator & { standalone?: boolean }).standalone === true;
+
+  function b64ToBytes(s: string): Uint8Array {
+    const pad = '='.repeat((4 - (s.length % 4)) % 4);
+    const b64 = (s + pad).replace(/-/g, '+').replace(/_/g, '/');
+    return Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+  }
+
+  async function currentSubscription(): Promise<PushSubscription | null> {
+    if (!supported || !pushReady) return null;
+    const reg = await navigator.serviceWorker.getRegistration('/');
+    return reg ? reg.pushManager.getSubscription() : null;
+  }
+
+  async function syncSubscription(sub: PushSubscription): Promise<boolean> {
+    if (!settings.location) return false;
+    const res = await fetch('/api/alerts/subscribe', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        endpoint: sub.endpoint,
+        location: { token: settings.location.token },
+        prefs: { standard: settings.standard, threshold: settings.threshold, severe: settings.severe, improve: settings.improve },
+      }),
+    }).catch(() => null);
+    return Boolean(res?.ok);
+  }
+
+  function show(state: { text: string; enable?: boolean; disable?: boolean; test?: boolean }) {
+    pushStatus.textContent = state.text;
+    btnEnable.hidden = !state.enable;
+    btnDisable.hidden = !state.disable;
+    btnTest.hidden = !state.test;
+  }
+
+  async function refreshPushState() {
+    if (!pushReady) return show({ text: 'Background notifications aren’t available on this server right now. In-page alerts still work while Live AQI is open.' });
+    if (!supported) {
+      if (isIOS && !standalone) return show({ text: 'On iPhone and iPad, add Live AQI to your Home Screen first (Share → Add to Home Screen), then open it from there to turn on notifications.' });
+      return show({ text: 'This browser does not support background notifications. In-page alerts still work while Live AQI is open.' });
+    }
+    if (Notification.permission === 'denied') return show({ text: 'Notifications are blocked for this site. Allow them in your browser’s site settings, then reload this page.' });
+    const sub = await currentSubscription();
+    if (sub) {
+      const where = settings.location?.name ?? 'your location';
+      return show({ text: `On — watching ${where}. You’ll be notified when the air crosses your level.`, disable: true, test: true });
+    }
+    return show({ text: 'Off. Turn on to get alerts even when Live AQI is closed.', enable: true });
+  }
+
+  btnEnable.addEventListener('click', async () => {
+    if (!location_) {
+      pushStatus.textContent = 'Choose a location to watch first, then save your settings.';
+      return;
+    }
+    if (!settings.location) {
+      settings = readForm();
+      saveAlertSettings(settings);
+    }
+    btnEnable.disabled = true;
+    pushStatus.textContent = 'Waiting for your permission…';
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') {
+        await refreshPushState();
+        if (permission === 'default') pushStatus.textContent = 'Permission wasn’t granted. You can turn notifications on any time.';
+        return;
+      }
+      const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+      await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(vapidKey) as BufferSource });
+      const ok = await syncSubscription(sub);
+      if (!ok) {
+        await sub.unsubscribe();
+        pushStatus.textContent = 'We couldn’t register this browser for alerts. Please try again.';
+        return;
+      }
+      await refreshPushState();
+    } catch (err) {
+      console.error(err);
+      pushStatus.textContent = 'Turning on notifications failed. Check that notifications are allowed and try again.';
+    } finally {
+      btnEnable.disabled = false;
+    }
+  });
+
+  btnDisable.addEventListener('click', async () => {
+    const sub = await currentSubscription();
+    if (sub) {
+      await fetch('/api/alerts/unsubscribe', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ endpoint: sub.endpoint }) }).catch(() => null);
+      await sub.unsubscribe().catch(() => false);
+    }
+    await refreshPushState();
+  });
+
+  btnTest.addEventListener('click', async () => {
+    const sub = await currentSubscription();
+    if (!sub) return refreshPushState();
+    btnTest.disabled = true;
+    const res = await fetch('/api/alerts/test', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ endpoint: sub.endpoint }) }).catch(() => null);
+    const body = res ? await res.json().catch(() => ({})) : {};
+    pushStatus.textContent = res?.ok ? 'Test sent — it should arrive within a few seconds.' : (body as { error?: string }).error ?? 'The test notification could not be sent.';
+    setTimeout(() => (btnTest.disabled = false), 5000);
+  });
+
+  fillForm();
+  refreshPushState();
+</script>

@@ -1,0 +1,55 @@
+---
+import { STANDARDS, type StandardId } from '../../lib/aqi/standards';
+import { formatDateTime, relativeTime, tzAbbreviation } from '../../lib/format';
+import type { LocationReport } from '../../lib/services/reports';
+
+interface Props {
+  report: LocationReport;
+  standard: StandardId;
+}
+const { report, standard } = Astro.props;
+const tz = report.place.timezone;
+const def = STANDARDS[standard];
+const method =
+  standard === 'us'
+    ? 'PM2.5 and PM10 use the EPA NowCast, a 12-hour weighted average. Ozone and CO use 8-hour averages, with ozone also checked against the 1-hour table. NO2 and SO2 use hourly values. PM2.5 breakpoints follow the 2024 EPA revision.'
+    : 'PM2.5, PM10, NO2 and SO2 use 24-hour averages with at least 16 valid hours. Ozone and CO use the highest 8-hour average of the last 24 hours. At least three pollutants, including PM2.5 or PM10, are required.';
+const rows = [
+  ['Valid for', `${formatDateTime(report.current.time, tz)} ${tzAbbreviation(report.current.time, tz)}`],
+  ['Fetched', relativeTime(report.fetchedAt)],
+  ['Type', 'Modelled, not a ground sensor'],
+  ['Grid cell', `${report.source.gridLat.toFixed(2)}°, ${report.source.gridLon.toFixed(2)}°`],
+  ['Dataset', report.source.dataset],
+  ['Index', def.name],
+];
+---
+
+<div class="grid gap-10 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:gap-16">
+  <dl class="code-card grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 self-start p-5 text-[0.8125rem] sm:p-6">
+    {
+      rows.map(([k, v]) => (
+        <>
+          <dt class="text-subtle">{k}</dt>
+          <dd>{v}</dd>
+        </>
+      ))
+    }
+    <dt class="text-subtle">Provider</dt>
+    <dd><a class="link" href={report.source.providerUrl} rel="noopener">{report.source.provider}</a></dd>
+  </dl>
+  <div class="space-y-4 text-muted">
+    {
+      report.stale && (
+        <p class="rounded-ui bg-pale p-4 text-ink">
+          <strong>Showing the last available data.</strong> The provider didn’t respond on the latest attempt. These values
+          were fetched {relativeTime(report.fetchedAt)}.
+        </p>
+      )
+    }
+    <p>{method}</p>
+    <p>
+      Model data covers every place consistently but can differ from nearby ground monitors, especially during local
+      events such as fires or rush hour. <a class="link text-ink" href="/methodology">Read the methodology</a>
+    </p>
+  </div>
+</div>

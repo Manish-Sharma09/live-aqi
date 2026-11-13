@@ -1,0 +1,72 @@
+---
+import '../styles/global.css';
+import { Font } from 'astro:assets';
+import Seo from '../components/Seo.astro';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import NotificationManager from '../components/NotificationManager.astro';
+
+interface Props {
+  title: string;
+  description: string;
+  canonicalPath?: string;
+  noindex?: boolean;
+  jsonLd?: Record<string, unknown> | Array<Record<string, unknown>>;
+  /** Hide the footer (e.g. full-screen map). */
+  bare?: boolean;
+  /**
+   * Sky over the place being shown. When set, the page uses the city's local
+   * day/night; otherwise the visitor's local time decides (before first paint).
+   */
+  theme?: 'light' | 'dark' | undefined;
+  currentPlace?: { name: string } | undefined;
+}
+
+const { title, description, canonicalPath, noindex, jsonLd, bare = false, theme, currentPlace } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en" data-theme={theme ?? 'light'} data-theme-source={theme ? 'city' : 'local'}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <script is:inline>
+      // Apply the day/night theme before first paint: a session override wins,
+      // then the city's sky (set by the server), then the visitor's local time.
+      (function () {
+        try {
+          var d = document.documentElement;
+          var o = sessionStorage.getItem('laqi:theme');
+          if (o === 'light' || o === 'dark') d.setAttribute('data-theme', o);
+          else if (d.getAttribute('data-theme-source') === 'local') {
+            var h = new Date().getHours();
+            d.setAttribute('data-theme', h >= 6 && h < 18 ? 'light' : 'dark');
+          }
+        } catch (e) {}
+      })();
+    </script>
+    <meta name="theme-color" content="#e6ecf4" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#08122b" media="(prefers-color-scheme: dark)" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon.ico" sizes="32x32" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="sitemap" href="/sitemap.xml" />
+    <Font cssVariable="--font-jakarta" preload={[{ subset: 'latin' }]} />
+    <Seo title={title} description={description} canonicalPath={canonicalPath} noindex={noindex} jsonLd={jsonLd} />
+    <meta name="generator" content={Astro.generator} />
+  </head>
+  <body class="flex min-h-dvh flex-col">
+    <a
+      href="#main"
+      class="sr-only z-(--z-skip) rounded-ui bg-surface px-4 py-2 font-semibold text-ink focus:not-sr-only focus:fixed focus:top-3 focus:left-3"
+      >Skip to content</a
+    >
+    <Header currentPlace={currentPlace} />
+    <main id="main" class="flex flex-1 flex-col overflow-x-clip">
+      <slot />
+    </main>
+    {!bare && <Footer />}
+    <NotificationManager />
+  </body>
+</html>

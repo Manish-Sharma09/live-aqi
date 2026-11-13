@@ -1,0 +1,81 @@
+---
+import Logo from './ui/Logo.astro';
+import { waqi } from '../lib/config';
+
+const year = new Date().getFullYear();
+const columns = [
+  {
+    title: 'Explore',
+    links: [
+      { href: '/', label: 'Overview' },
+      { href: '/map', label: 'Global map' },
+      { href: '/world', label: 'World overview' },
+      { href: '/rankings', label: 'City rankings' },
+    ],
+  },
+  {
+    title: 'Countries',
+    links: [
+      { href: '/country/india', label: 'India' },
+      { href: '/country/malaysia', label: 'Malaysia' },
+      { href: '/country/united-states', label: 'United States' },
+      { href: '/country/united-kingdom', label: 'United Kingdom' },
+    ],
+  },
+  {
+    title: 'Live AQI',
+    links: [
+      { href: '/alerts', label: 'Alerts' },
+      { href: '/about', label: 'About' },
+      { href: '/methodology', label: 'Methodology' },
+      { href: '/privacy', label: 'Privacy' },
+    ],
+  },
+];
+---
+
+<footer class="mt-auto border-t border-line bg-surface">
+  <div class="shell grid gap-10 py-12 lg:grid-cols-[1.2fr_2fr] lg:py-14">
+    <div class="max-w-sm">
+      <Logo size={26} />
+      <p class="mt-4 text-ink-2">Real-time air quality for every city, with the health guidance and alerts to act on it.</p>
+      <p class="mt-4 text-xs text-ink-3">Live AQI provides information, not medical advice. In an emergency, follow your local health authority.</p>
+    </div>
+    <div class="grid grid-cols-2 gap-8 sm:grid-cols-3">
+      {
+        columns.map((col) => (
+          <nav aria-label={col.title}>
+            <p class="text-sm font-bold text-ink">{col.title}</p>
+            <ul class="mt-3 space-y-2">
+              {col.links.map((l) => (
+                <li>
+                  <a href={l.href} class="text-ink-2 transition-colors hover:text-ink">
+                    {l.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        ))
+      }
+    </div>
+  </div>
+  <div class="border-t border-line">
+    <div class="shell flex flex-col gap-2 py-5 text-xs text-ink-3 lg:flex-row lg:items-center lg:justify-between">
+      <p>© {year} Live AQI · live-aqi.com</p>
+      <p class="max-w-3xl lg:text-right">
+        Air-quality data: <a class="link" href="https://open-meteo.com/" rel="noopener">Open-Meteo</a>{' '}using{' '}
+        <a class="link" href="https://atmosphere.copernicus.eu/" rel="noopener">Copernicus Atmosphere Monitoring Service</a>{' '}
+        (CAMS){
+          waqi.enabled && (
+            <>
+              ; stations:{' '}<a class="link" href="https://waqi.info/" rel="noopener">World Air Quality Index Project</a>
+            </>
+          )
+        }. Places:{' '}<a class="link" href="https://www.geonames.org/" rel="noopener">GeoNames</a>{' '}(CC BY 4.0). Map:{' '}
+        <a class="link" href="https://openfreemap.org/" rel="noopener">OpenFreeMap</a>{' '}©{' '}
+        <a class="link" href="https://www.openstreetmap.org/copyright" rel="noopener">OpenStreetMap</a>{' '}contributors.
+      </p>
+    </div>
+  </div>
+</footer>

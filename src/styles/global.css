@@ -1,0 +1,561 @@
+@import "tailwindcss";
+
+/*
+ * Live AQI — "soft sky" design system (day + night).
+ * Every semantic colour is a CSS variable that switches with [data-theme], so a
+ * single attribute on <html> flips the whole site between the day and night sky.
+ * Category colours for AQI live in src/lib/aqi/standards.ts (data, not chrome).
+ */
+
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+/* ----------------------------------------------------------- day theme */
+:root,
+[data-theme='light'] {
+  color-scheme: light;
+  --bg: #e6ecf4;
+  --bg-deep: #d9e2ee;
+  --surface: #ffffff;
+  --surface-2: #f3f6fb;
+  --surface-3: #e8eef6;
+  --glass: rgb(255 255 255 / 0.6);
+  --glass-strong: rgb(255 255 255 / 0.78);
+  --glass-border: rgb(255 255 255 / 0.9);
+  --line: #dde4ee;
+  --line-strong: #c5d0de;
+  --ink: #1b2942;
+  --ink-2: #45546f;
+  --ink-3: #5f6d86;
+  --accent: #2f7fe6;
+  --accent-soft: #dbe9fc;
+  --accent-ink: #1b4d8f;
+  --on-accent: #ffffff;
+  --series-pm25: #7a2bc8;
+  --series-pm10: #b45f14;
+  --shadow-card: 0 1px 2px rgb(27 41 66 / 0.05), 0 12px 32px -14px rgb(27 41 66 / 0.2);
+  --shadow-pop: 0 2px 6px rgb(27 41 66 / 0.08), 0 28px 56px -18px rgb(27 41 66 / 0.32);
+  /* Sky scene */
+  --sky-top: #a7cbf2;
+  --sky-mid: #cde2f8;
+  --sky-bottom: #e9f1fb;
+  --city-far: #b3c8e3;
+  --city-mid: #8aa7cd;
+  --city-near: #6687b6;
+  --city-front: #46679a;
+  --city-window: rgb(255 255 255 / 0.55);
+  --cloud: rgb(255 255 255 / 0.92);
+  --star: transparent;
+}
+
+/* --------------------------------------------------------- night theme */
+[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #08122b;
+  --bg-deep: #050c20;
+  --surface: #0f1c3a;
+  --surface-2: #15254b;
+  --surface-3: #1b2e59;
+  --glass: rgb(19 35 72 / 0.55);
+  --glass-strong: rgb(19 35 72 / 0.75);
+  --glass-border: rgb(255 255 255 / 0.1);
+  --line: rgb(255 255 255 / 0.08);
+  --line-strong: rgb(255 255 255 / 0.16);
+  --ink: #e9eff9;
+  --ink-2: #b0bdd6;
+  --ink-3: #8595b3;
+  --accent: #5ea3ff;
+  --accent-soft: #1c3767;
+  --accent-ink: #d6e7ff;
+  --on-accent: #06142e;
+  --series-pm25: #b48cf5;
+  --series-pm10: #f2a65a;
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.35), 0 14px 36px -14px rgb(0 0 0 / 0.6);
+  --shadow-pop: 0 2px 6px rgb(0 0 0 / 0.4), 0 30px 60px -18px rgb(0 0 0 / 0.7);
+  --sky-top: #040b20;
+  --sky-mid: #0b1836;
+  --sky-bottom: #16284f;
+  --city-far: #26396a;
+  --city-mid: #1f325f;
+  --city-near: #182a52;
+  --city-front: #111f40;
+  --city-window: rgb(255 214 130 / 0.55);
+  --cloud: rgb(255 255 255 / 0.05);
+  --star: rgb(255 255 255 / 0.85);
+}
+
+/* Motion & layers (not theme-dependent) */
+:root {
+  --duration-fast: 120ms;
+  --duration-base: 200ms;
+  --duration-slow: 320ms;
+  --z-header: 40;
+  --z-overlay: 50;
+  --z-popover: 55;
+  --z-toast: 60;
+  --z-skip: 70;
+  --header-h: 4.25rem;
+}
+
+/* ----------------------------------------------- semantic Tailwind tokens */
+@theme inline {
+  --color-*: initial;
+  --color-white: #ffffff;
+  --color-black: #000000;
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-glass: var(--glass);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-ink: var(--accent-ink);
+  --color-on-accent: var(--on-accent);
+  --color-series-pm25: var(--series-pm25);
+  --color-series-pm10: var(--series-pm10);
+
+  /* Aliases kept so every page shares one vocabulary. */
+  --color-canvas: var(--surface);
+  --color-pale: var(--surface-2);
+  --color-pale-strong: var(--surface-3);
+  --color-muted: var(--ink-2);
+  --color-subtle: var(--ink-3);
+  --color-border: var(--line-strong);
+  --color-action: var(--accent);
+  --color-action-bright: var(--accent);
+  --color-stage: var(--bg);
+  --color-stage-raised: var(--surface);
+  --color-stage-chip: var(--accent-soft);
+  --color-stage-line: var(--line);
+  --color-on-stage: var(--ink);
+  --color-on-stage-muted: var(--ink-2);
+  --color-on-stage-faint: var(--ink-3);
+
+  --font-sans: var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
+
+  --text-label: 0.6875rem;
+  --text-label--line-height: 1.2;
+  --text-caption: 0.75rem;
+  --text-caption--line-height: 1.45;
+
+  --radius-*: initial;
+  --radius-xs: 6px;
+  --radius-ui: 12px;
+  --radius-card: 20px;
+  --radius-scene: 28px;
+
+  --shadow-*: initial;
+  --shadow-card: var(--shadow-card);
+  --shadow-pop: var(--shadow-pop);
+
+  --ease-*: initial;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in: cubic-bezier(0.55, 0, 1, 0.45);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.985);
+  }
+}
+
+/* ------------------------------------------------------------------ base */
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
+    scroll-padding-top: calc(var(--header-h) + 1rem);
+    background: var(--bg);
+  }
+  body {
+    background:
+      radial-gradient(1200px 600px at 20% -10%, color-mix(in srgb, var(--sky-mid) 55%, transparent), transparent 70%),
+      var(--bg);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-size: 1rem;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection {
+    background: var(--accent);
+    color: var(--on-accent);
+  }
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+    border-radius: var(--radius-xs);
+  }
+  [hidden] {
+    display: none !important;
+  }
+  table {
+    font-variant-numeric: tabular-nums;
+  }
+  sub {
+    font-size: 0.62em;
+    vertical-align: baseline;
+    position: relative;
+    top: 0.22em;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@view-transition {
+  navigation: auto;
+}
+
+/* ---------------------------------------------------------------- type */
+@utility type-hero {
+  font-size: clamp(2.125rem, 5.4vw, 3.5rem);
+  line-height: 1.04;
+  letter-spacing: -0.035em;
+  font-weight: 800;
+  text-wrap: balance;
+}
+@utility type-section {
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  line-height: 1.12;
+  letter-spacing: -0.025em;
+  font-weight: 750;
+  text-wrap: balance;
+}
+@utility type-title {
+  font-size: clamp(1.25rem, 2.2vw, 1.5rem);
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  font-weight: 700;
+  text-wrap: balance;
+}
+@utility label {
+  font-size: var(--text-label);
+  line-height: 1.2;
+  letter-spacing: 0.09em;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+@utility type-code {
+  font-variant-numeric: tabular-nums;
+}
+@utility numeric {
+  font-variant-numeric: tabular-nums;
+}
+@utility animate-toast {
+  animation: toast-in var(--duration-slow) var(--ease-out) both;
+}
+@utility animate-rise {
+  animation: rise-in 520ms var(--ease-out) both;
+}
+
+/* -------------------------------------------------------------- layout */
+@utility shell {
+  width: 100%;
+  max-width: 82rem;
+  margin-inline: auto;
+  padding-inline: 1rem;
+  @media (width >= 40rem) {
+    padding-inline: 1.5rem;
+  }
+  @media (width >= 64rem) {
+    padding-inline: 2rem;
+  }
+}
+
+/* Hero band: the sky behind page titles. */
+@utility stage {
+  background: linear-gradient(180deg, var(--sky-top) 0%, var(--sky-mid) 55%, var(--bg) 100%);
+  color: var(--ink);
+}
+
+@utility btn-icon {
+  width: 2.75rem;
+  height: 2.75rem;
+  min-height: 0;
+  padding: 0;
+}
+
+/* ---------------------------------------------------------- components */
+@layer components {
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-card);
+  }
+  .tile {
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+  }
+  .glass {
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    border-radius: 24px;
+    box-shadow: var(--shadow-pop);
+    -webkit-backdrop-filter: blur(18px) saturate(1.25);
+    backdrop-filter: blur(18px) saturate(1.25);
+  }
+  .glass-tile {
+    background: var(--glass-strong);
+    border: 1px solid var(--glass-border);
+    border-radius: 16px;
+  }
+
+  /* Buttons */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 2.75rem;
+    padding: 0.5rem 1.125rem;
+    border-radius: 999px;
+    font-size: 0.9375rem;
+    font-weight: 650;
+    line-height: 1.2;
+    white-space: nowrap;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition-property: background-color, color, border-color, box-shadow, transform;
+    transition-duration: var(--duration-fast);
+    transition-timing-function: var(--ease-out);
+  }
+  .btn:active {
+    transform: translateY(1px);
+  }
+  .btn:disabled,
+  .btn[aria-disabled='true'] {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .btn-primary,
+  .btn-ink {
+    background: var(--accent);
+    color: var(--on-accent);
+    box-shadow: 0 6px 16px -6px color-mix(in srgb, var(--accent) 60%, transparent);
+  }
+  .btn-primary:hover,
+  .btn-ink:hover {
+    background: color-mix(in srgb, var(--accent) 88%, var(--ink));
+  }
+  .btn-secondary,
+  .btn-ghost-dark,
+  .btn-outline {
+    background: var(--surface);
+    color: var(--ink);
+    border-color: var(--line);
+  }
+  .btn-secondary:hover,
+  .btn-ghost-dark:hover,
+  .btn-outline:hover {
+    border-color: var(--line-strong);
+    background: var(--surface-2);
+  }
+
+  /* Pills and chips */
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    height: 1.875rem;
+    padding: 0 0.75rem;
+    border-radius: 999px;
+    background: var(--accent-soft);
+    color: var(--accent-ink);
+    font-size: 0.8125rem;
+    font-weight: 650;
+    white-space: nowrap;
+  }
+
+  /* Segmented control (pill tabs) */
+  .seg {
+    display: inline-flex;
+    padding: 4px;
+    gap: 2px;
+    border-radius: 999px;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+  }
+  .seg > a,
+  .seg > button {
+    padding: 0.375rem 0.875rem;
+    border-radius: 999px;
+    font-size: 0.8125rem;
+    font-weight: 650;
+    color: var(--ink-2);
+    min-height: 2.25rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition-property: background-color, color;
+    transition-duration: var(--duration-fast);
+  }
+  .seg > :hover {
+    color: var(--ink);
+  }
+  .seg > [aria-pressed='true'],
+  .seg > [aria-current='page'],
+  .seg > [aria-selected='true'] {
+    background: var(--accent-soft);
+    color: var(--accent-ink);
+  }
+
+  /* AQI value pill: the value sits inside its category colour. */
+  .aqi-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.75rem;
+    padding: 0.125rem 0.625rem;
+    border-radius: 999px;
+    font-weight: 750;
+    font-size: 0.8125rem;
+    line-height: 1.5;
+    font-variant-numeric: tabular-nums;
+    background: var(--cat, var(--surface-3));
+    color: var(--cat-ink, var(--ink));
+  }
+  .swatch {
+    display: inline-block;
+    width: 0.625rem;
+    height: 0.625rem;
+    border-radius: 999px;
+    background: var(--cat, var(--line-strong));
+    flex: none;
+  }
+
+  .byline {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    row-gap: 0.375rem;
+  }
+  .byline > * + *::before {
+    content: '·';
+    margin-inline: 0.5rem;
+    opacity: 0.6;
+  }
+
+  .code-card {
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    font-variant-numeric: tabular-nums;
+  }
+  .utility-card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-card);
+  }
+
+  .link {
+    color: inherit;
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+    text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
+  }
+  .link:hover {
+    text-decoration-color: currentColor;
+  }
+
+  .prose-reading {
+    max-width: 44rem;
+  }
+  .prose-reading > * + * {
+    margin-top: 1rem;
+  }
+  .prose-reading h2 {
+    margin-top: 3rem;
+    font-size: 1.5rem;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+    font-weight: 750;
+  }
+  .prose-reading h3 {
+    margin-top: 2rem;
+    font-size: 1.125rem;
+    font-weight: 700;
+  }
+  .prose-reading a {
+    color: var(--accent-ink);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  [data-theme='dark'] .prose-reading a {
+    color: var(--accent);
+  }
+  .prose-reading ul {
+    list-style: disc;
+    padding-left: 1.25rem;
+  }
+  .prose-reading ul > li + li {
+    margin-top: 0.375rem;
+  }
+  .prose-reading code {
+    font-size: 0.875em;
+    background: var(--surface-2);
+    padding: 0.0625rem 0.375rem;
+    border-radius: 6px;
+  }
+
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9375rem;
+  }
+  .data-table th {
+    text-align: left;
+    font-size: 0.75rem;
+    font-weight: 650;
+    color: var(--ink-3);
+    padding: 0.625rem 0.75rem;
+    border-bottom: 1px solid var(--line);
+    white-space: nowrap;
+  }
+  .data-table td {
+    padding: 0.75rem;
+    border-bottom: 1px solid var(--line);
+    vertical-align: middle;
+  }
+  .data-table tbody tr:last-child td {
+    border-bottom: 0;
+  }
+  .data-table tbody tr {
+    transition: background-color var(--duration-fast) var(--ease-out);
+  }
+  .data-table tbody tr:hover {
+    background: var(--surface-2);
+  }
+  .data-table th:first-child,
+  .data-table td:first-child {
+    padding-left: 0.25rem;
+  }
+  .data-table .num {
+    text-align: right;
+  }
+}

@@ -1,0 +1,32 @@
+---
+import Icon from './Icon.astro';
+
+interface Props {
+  title: string;
+  message: string;
+  tone?: 'dark' | 'light';
+  retryHref?: string;
+  class?: string;
+}
+const { title, message, tone = 'light', retryHref, class: className } = Astro.props;
+const dark = tone === 'dark';
+---
+
+<div
+  role="alert"
+  class:list={[
+    'flex gap-4 rounded-ui border p-5 sm:p-6',
+    dark ? 'border-stage-line text-on-stage' : 'border-line bg-pale text-ink',
+    className,
+  ]}
+>
+  <Icon name="alert" size={22} class="mt-0.5" />
+  <div>
+    <p class="font-semibold">{title}</p>
+    <p class:list={['mt-1', dark ? 'text-on-stage-muted' : 'text-muted']}>{message}</p>
+    <div class="mt-4 flex flex-wrap gap-2">
+      {retryHref && <a href={retryHref} class:list={['btn', dark ? 'btn-primary' : 'btn-ink']}>Try again</a>}
+      <slot />
+    </div>
+  </div>
+</div>

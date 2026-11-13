@@ -1,0 +1,217 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import StandardSwitch from '../components/aqi/StandardSwitch.astro';
+import Section from '../components/ui/Section.astro';
+import ErrorState from '../components/ui/ErrorState.astro';
+import Icon from '../components/ui/Icon.astro';
+import { categoryFor, isStandardId, STANDARDS, type StandardId } from '../lib/aqi/standards';
+import { CONTINENTS, getCountry, type ContinentCode } from '../lib/geo/places';
+import { flag, formatHour, relativeTime } from '../lib/format';
+import { describeError } from '../lib/services/http';
+import { getWorldSnapshot, readingValue, type CityReading, type Snapshot } from '../lib/services/reports';
+
+export const prerender = false;
+
+const stdParam = Astro.url.searchParams.get('std');
+const standard: StandardId = isStandardId(stdParam) ? stdParam : 'us';
+const stdName = STANDARDS[standard].shortName;
+
+let snap: Snapshot | null = null;
+let error: string | null = null;
+try {
+  snap = await getWorldSnapshot();
+  Astro.cache.set({ maxAge: 600, swr: 1800 });
+} catch (err) {
+  error = describeError(err);
+}
+
+const rows = (snap?.readings ?? []).filter((r) => readingValue(r, standard) !== null);
+const v = (r: CityReading) => readingValue(r, standard)!;
+const medianOf = (xs: number[]) => {
+  const s = [...xs].sort((a, b) => a - b);
+  return s.length ? s[Math.floor((s.length - 1) / 2)]! : null;
+};
+const total = rows.length;
+const globalMedian = medianOf(rows.map(v));
+const sorted = [...rows].sort((a, b) => v(b) - v(a));
+const unhealthyShare = total ? Math.round((rows.filter((r) => categoryFor(standard, v(r)).level >= 3).length / total) * 100) : 0;
+const distribution = STANDARDS[standard].categories.map((c) => ({ ...c, count: rows.filter((r) => categoryFor(standard, v(r)).level === c.level).length }));
+
+const continents = (Object.keys(CONTINENTS) as ContinentCode[])
+  .filter((c) => c !== 'AN')
+  .map((code) => {
+    const list = rows.filter((r) => getCountry(r.city.cc)?.continent === code);
+    const worst = [...list].sort((a, b) => v(b) - v(a))[0];
+    return {
+      code,
+      name: CONTINENTS[code],
+      count: list.length,
+      median: medianOf(list.map(v)),
+      unhealthy: list.filter((r) => categoryFor(standard, v(r)).level >= 3).length,
+      worst,
+    };
+  })
+  .filter((c) => c.count > 0)
+  .sort((a, b) => (b.median ?? 0) - (a.median ?? 0));
+
+const byCountry = new Map<string, CityReading[]>();
+for (const r of rows) byCountry.set(r.city.cc, [...(byCountry.get(r.city.cc) ?? []), r]);
+const countries = [...byCountry.entries()]
+  .map(([cc, list]) => {
+    const c = getCountry(cc)!;
+    const ordered = [...list].sort((a, b) => v(b) - v(a));
+    return { country: c, median: medianOf(list.map(v))!, worst: ordered[0]!, cities: list.length };
+  })
+  .sort((a, b) => b.median - a.median);
+
+const badge = (val: number) => {
+  const c = categoryFor(standard, val);
+  return `--cat:${c.color};--cat-ink:${c.ink}`;
+};
+---
+
+<BaseLayout
+  title="World Air Quality Overview — Live AQI by Country & Continent | Live AQI"
+  description="How clean is the world's air right now? Live air-quality overview of 300+ major cities by continent and country, with category distribution and links to every country."
+  canonicalPath="/world"
+>
+  <section class="stage">
+    <div class="shell pt-10 pb-12 lg:pt-14 lg:pb-16">
+      <div class="flex flex-wrap items-start justify-between gap-6">
+        <div>
+          <h1 class="type-hero max-w-4xl">How clean is the world’s air right now?</h1>
+        </div>
+        <StandardSwitch current={standard} />
+      </div>
+
+      {
+        snap && total > 0 && (
+          <>
+            <dl class="mt-10 grid grid-cols-2 gap-3 lg:grid-cols-4">
+              <div class="card p-5">
+                <dt class="text-sm text-on-stage-faint">Cities reporting</dt>
+                <dd class="mt-3 text-[2.25rem] leading-none font-extrabold tracking-[-0.03em]">{total}</dd>
+              </div>
+              <div class="card p-5">
+                <dt class="text-sm text-on-stage-faint">Median {stdName}</dt>
+                <dd class="mt-3 text-[2.25rem] leading-none font-extrabold tracking-[-0.03em]">{globalMedian}</dd>
+                <dd class="mt-1 text-sm text-on-stage-muted">{categoryFor(standard, globalMedian!).label}</dd>
+              </div>
+              <div class="card p-5">
+                <dt class="text-sm text-on-stage-faint">Unhealthy or worse</dt>
+                <dd class="mt-3 text-[2.25rem] leading-none font-extrabold tracking-[-0.03em]">{unhealthyShare}%</dd>
+                <dd class="mt-1 text-sm text-on-stage-muted">of monitored cities</dd>
+              </div>
+              <div class="card p-5">
+                <dt class="text-sm text-on-stage-faint">Most polluted and cleanest</dt>
+                <dd class="mt-3 text-lg font-semibold">
+                  <a class="hover:underline" href={`/city/${sorted[0]!.city.slug}`}>{sorted[0]!.city.name}</a>{' '}
+                  <span class="font-mono text-on-stage-muted">{v(sorted[0]!)}</span>
+                </dd>
+                <dd class="text-lg font-semibold">
+                  <a class="hover:underline" href={`/city/${sorted[total - 1]!.city.slug}`}>{sorted[total - 1]!.city.name}</a>{' '}
+                  <span class="font-mono text-on-stage-muted">{v(sorted[total - 1]!)}</span>
+                </dd>
+              </div>
+            </dl>
+
+            <div class="mt-10">
+              <p class="text-sm text-on-stage-faint">Cities by {stdName} category</p>
+              <div class="mt-3 flex h-7 gap-0.5" role="img" aria-label={distribution.map((d) => `${d.label}: ${d.count}`).join(', ')}>
+                {distribution
+                  .filter((d) => d.count > 0)
+                  .map((d) => (
+                    <span
+                      class="flex items-center overflow-hidden rounded-ui px-2 font-mono text-[0.6875rem] font-bold"
+                      style={`flex:${d.count};background:${d.color};color:${d.ink}`}
+                      title={`${d.label}: ${d.count} cities`}
+                    >
+                      {d.count / total >= 0.06 ? `${Math.round((d.count / total) * 100)}%` : ''}
+                    </span>
+                  ))}
+              </div>
+              <ul class="mt-3 flex flex-wrap gap-x-5 gap-y-1.5 text-caption text-on-stage-muted">
+                {distribution.map((d) => (
+                  <li class="flex items-center gap-1.5">
+                    <span class="swatch" style={`--cat:${d.color}`} />
+                    {d.label} <span class="font-mono text-on-stage-faint">{d.count}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <p class="byline mt-8 text-sm text-on-stage-faint">
+              <span>Valid {formatHour(snap.validTime, 'UTC')} UTC</span>
+              <span>Fetched {relativeTime(snap.fetchedAt)}</span>
+              <span>{total} of {snap.requested} cities reporting</span>
+            </p>
+          </>
+        )
+      }
+    </div>
+  </section>
+
+  <div class="shell pt-12 lg:pt-16">
+    {
+      error || !snap ? (
+        <ErrorState class="mb-16" title="The world overview is temporarily unavailable" message={`${error ?? ''} Please try again shortly.`} retryHref={Astro.url.pathname + Astro.url.search} />
+      ) : (
+        <>
+          <Section id="continents" title="By continent">
+            <div class="card relative overflow-x-auto px-3 py-2 sm:px-5">
+              <table class="data-table min-w-[36rem]">
+                <caption class="sr-only">Air quality by continent</caption>
+                <thead>
+                  <tr><th scope="col">Continent</th><th scope="col">Median {stdName}</th><th scope="col">Cities</th><th scope="col">Unhealthy or worse</th><th scope="col">Most polluted</th></tr>
+                </thead>
+                <tbody>
+                  {continents.map((c) => (
+                    <tr>
+                      <td class="font-semibold">
+                        <a class="hover:underline" href={`/rankings?region=${c.code}${standard === 'in' ? '&std=in' : ''}`}>{c.name}</a>
+                      </td>
+                      <td>{c.median !== null && <span class="aqi-badge" style={badge(c.median)}>{c.median}</span>}</td>
+                      <td class="font-mono">{c.count}</td>
+                      <td class="font-mono">{c.unhealthy}</td>
+                      <td>{c.worst && <a class="hover:underline" href={`/city/${c.worst.city.slug}`}>{c.worst.city.name}</a>} <span class="font-mono text-sm text-subtle">{c.worst ? v(c.worst) : ''}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Section>
+
+          <Section id="countries" title="By country" description="Median across each country’s monitored major cities. Open a country for its full city list, regions and seven-day trend.">
+            <div class="card relative overflow-x-auto px-3 py-2 sm:px-5">
+              <table class="data-table min-w-[36rem]">
+                <caption class="sr-only">Air quality by country</caption>
+                <thead>
+                  <tr><th scope="col">Country</th><th scope="col">Median {stdName}</th><th scope="col">Category</th><th scope="col">Most polluted city</th><th scope="col" class="text-right">Cities</th></tr>
+                </thead>
+                <tbody>
+                  {countries.map((c) => (
+                    <tr>
+                      <td>
+                        <a class="font-semibold hover:underline" href={`/country/${c.country.slug}`}>
+                          <span aria-hidden="true">{flag(c.country.cc)} </span>{c.country.name}
+                        </a>
+                      </td>
+                      <td><span class="aqi-badge" style={badge(c.median)}>{c.median}</span></td>
+                      <td class="text-sm">{categoryFor(standard, c.median).label}</td>
+                      <td><a class="hover:underline" href={`/city/${c.worst.city.slug}`}>{c.worst.city.name}</a> <span class="font-mono text-sm text-subtle">{v(c.worst)}</span></td>
+                      <td class="text-right font-mono">{c.cities}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Section>
+
+          <div class="mb-16 flex flex-wrap gap-3">
+            <a href="/map" class="btn btn-ink"><Icon name="map" size={17} /> Explore the map</a>
+            <a href="/rankings" class="btn btn-outline">City rankings <Icon name="arrow-right" size={16} /></a>
+          </div>
+        </>
+      )
+    }
+  </div>
+</BaseLayout>

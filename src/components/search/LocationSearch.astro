@@ -1,0 +1,76 @@
+---
+import Icon from '../ui/Icon.astro';
+
+interface Props {
+  mode?: 'navigate' | 'set-location' | 'event';
+  tone?: 'dark' | 'light';
+  placeholder?: string;
+  label?: string;
+  autofocus?: boolean;
+  class?: string;
+  id?: string;
+}
+
+const {
+  mode = 'navigate',
+  placeholder = 'Search a city, country or region',
+  label = 'Search locations',
+  autofocus = false,
+  class: className,
+  id,
+} = Astro.props;
+---
+
+<laqi-search
+  data-mode={mode}
+  id={id}
+  class:list={['relative block', className]}
+  style="--opt-active: var(--surface-3); --opt-hover: var(--surface-2)"
+>
+  <label class="sr-only" for={id ? `${id}-input` : undefined}>{label}</label>
+  <div
+    class:list={[
+      'flex items-center gap-2 rounded-full border border-line bg-surface px-4 text-ink transition-colors focus-within:border-accent focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-accent',
+    ]}
+  >
+    <Icon name="search" class="text-ink-3" />
+    <input
+      id={id ? `${id}-input` : undefined}
+      type="search"
+      role="combobox"
+      aria-autocomplete="list"
+      aria-expanded="false"
+      aria-label={label}
+      autocomplete="off"
+      spellcheck="false"
+      enterkeyhint="search"
+      placeholder={placeholder}
+      autofocus={autofocus}
+      class:list={[
+        'h-12 min-w-0 flex-1 bg-transparent text-base outline-none [&::-webkit-search-cancel-button]:hidden',
+        'placeholder:text-ink-3',
+      ]}
+    />
+  </div>
+  <p
+    data-status
+    role="status"
+    aria-live="polite"
+    hidden
+    class="mt-2 text-sm text-ink-2"
+  >
+  </p>
+  <ul
+    role="listbox"
+    aria-label="Search results"
+    hidden
+    class:list={[
+      'absolute inset-x-0 top-[calc(100%+0.375rem)] z-50 max-h-[min(26rem,60vh)] overflow-y-auto rounded-card border border-line bg-surface py-1.5 text-ink shadow-pop',
+    ]}
+  >
+  </ul>
+</laqi-search>
+
+<script>
+  import '../../scripts/search-element';
+</script>

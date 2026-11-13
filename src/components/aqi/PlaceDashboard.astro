@@ -1,0 +1,124 @@
+---
+/**
+ * Place dashboard (soft-sky redesign): sky scene + glass AQI card, weather
+ * tiles, trend and info cards in the overview; detailed sections below.
+ */
+import SkyScene from '../scene/SkyScene.astro';
+import AqiOverviewCard from '../overview/AqiOverviewCard.astro';
+import WeatherTiles from '../overview/WeatherTiles.astro';
+import TrendCard from '../overview/TrendCard.astro';
+import InfoCards from '../overview/InfoCards.astro';
+import HealthPanel from './HealthPanel.astro';
+import PollutantGrid from './PollutantGrid.astro';
+import WeatherPanel from './WeatherPanel.astro';
+import RecentChanges from './RecentChanges.astro';
+import NearbyPanel from './NearbyPanel.astro';
+import SourcePanel from './SourcePanel.astro';
+import StandardSwitch from './StandardSwitch.astro';
+import Section from '../ui/Section.astro';
+import ErrorState from '../ui/ErrorState.astro';
+import ShareButton from '../ui/ShareButton.astro';
+import { healthAdvice } from '../../lib/aqi/health';
+import { STANDARDS, type StandardId } from '../../lib/aqi/standards';
+import type { DashboardData } from '../../lib/services/dashboard';
+import { waqi } from '../../lib/config';
+
+interface Props {
+  data: DashboardData;
+  standard: StandardId;
+  shareUrl: string;
+}
+
+const { data, standard, shareUrl } = Astro.props;
+const { place, report, weather } = data;
+const result = report?.current.aqi[standard] ?? null;
+const showNearby = data.nearbyCities.length > 0 || data.stations.length > 0;
+const stationCount = data.stations.length;
+const europe = report?.source.dataset.includes('European') ?? false;
+const sourceLine = stationCount > 0 ? `${stationCount} monitoring stations nearby` : `CAMS model data · ${europe ? '11' : '45'} km grid`;
+
+---
+
+<div class="shell pt-5 pb-20 lg:pt-7">
+  <slot name="top" />
+
+  {
+    report ? (
+      <>
+        <div class="mt-4 grid gap-5 lg:grid-cols-[minmax(0,1.04fr)_minmax(0,1fr)] lg:gap-6">
+          <SkyScene
+            slug={place.slug}
+            class="flex flex-col justify-end px-4 pt-[8.5rem] pb-4 sm:px-6 sm:pt-[10rem] sm:pb-6 lg:min-h-[35rem] lg:justify-center lg:px-10 lg:py-10"
+          >
+            <AqiOverviewCard report={report} standard={standard} weather={weather?.weather ?? null} sourceLine={sourceLine} />
+          </SkyScene>
+
+          <div class="flex min-w-0 flex-col gap-5">
+            <WeatherTiles weather={weather?.weather ?? null} variant="card" class="hidden lg:grid" />
+            <TrendCard report={report} standard={standard} class="flex-1" />
+            <InfoCards report={report} standard={standard} stationCount={stationCount} class="hidden lg:grid" />
+          </div>
+        </div>
+
+        <div class="mt-5 flex flex-wrap items-center justify-between gap-3">
+          <StandardSwitch current={standard} />
+          <div class="flex flex-wrap items-center gap-2">
+            <ShareButton
+              url={shareUrl}
+              title={`${place.name} air quality on Live AQI`}
+              text={result ? `${place.name}: ${STANDARDS[standard].shortName} ${result.aqi}, ${result.category.label}.` : `Live air quality in ${place.name}.`}
+            />
+            <slot name="utility" />
+          </div>
+        </div>
+
+        {result && (
+          <div class="mt-12 lg:mt-14">
+            <Section id="health" title="What this means for you" boxed>
+              <HealthPanel advice={healthAdvice(standard, result.category, result.dominant)} />
+            </Section>
+
+            <Section
+              id="pollutants"
+              title="What’s in the air"
+              description="The six pollutants behind the index, ordered by their effect on it, with the WHO 2021 guideline for comparison."
+            >
+              <PollutantGrid current={report.current} standard={standard} />
+            </Section>
+
+            <Section id="weather" title="Weather">
+              <WeatherPanel weather={weather} timezone={place.timezone} pm25={report.current.concentrations.pm25} />
+            </Section>
+
+            <Section id="changes" title="Recent changes" boxed>
+              <RecentChanges changes={report.changes[standard]} standard={standard} timezone={place.timezone} />
+            </Section>
+
+            {showNearby && (
+              <Section id="nearby" title="Air quality nearby" boxed>
+                <NearbyPanel cities={data.nearbyCities} stations={data.stations} standard={standard} stationsEnabled={waqi.enabled} />
+              </Section>
+            )}
+
+            <Section id="data" title="About this reading" boxed>
+              <SourcePanel report={report} standard={standard} />
+            </Section>
+          </div>
+        )}
+      </>
+    ) : (
+      <SkyScene slug={place.slug} class="mt-4 px-4 pt-[8.5rem] pb-6 sm:px-8 lg:min-h-[28rem] lg:p-10">
+        <div class="glass max-w-xl p-6">
+          <h1 id="hero-heading" class="type-title">{place.name}</h1>
+          <p class="mt-1 text-ink-2">{[place.region, place.country].filter(Boolean).join(', ')}</p>
+          <ErrorState
+            class="mt-5"
+            title="Live air-quality data is unavailable right now"
+            message={`${data.error ?? 'The data provider did not respond.'} Live AQI never fills gaps with estimates, so please try again in a few minutes.`}
+            retryHref={Astro.url.pathname + Astro.url.search}
+          />
+        </div>
+      </SkyScene>
+    )
+  }
+</div>

@@ -1,11 +1,173 @@
 ---
-import Welcome from '../components/Welcome.astro';
-import Layout from '../layouts/Layout.astro';
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PlaceDashboard from '../components/aqi/PlaceDashboard.astro';
+import LocationBar from '../components/home/LocationBar.astro';
+import type { LocationSource } from '../components/home/types';
+import CityTable from '../components/ranking/CityTable.astro';
+import Icon from '../components/ui/Icon.astro';
+import { categoryFor, defaultStandardFor, isStandardId, STANDARDS } from '../lib/aqi/standards';
+import { cityToPlace, nearestCity, type Place } from '../lib/geo/places';
+import { loadDashboard } from '../lib/services/dashboard';
+import { defaultPlace, getWorldSnapshot, resolveLocationToken, type Snapshot } from '../lib/services/reports';
+import { formatHour, relativeTime } from '../lib/format';
+import { skyTheme } from '../lib/theme';
 
-// Welcome to Astro! Wondering what to do next? Check out the Astro documentation at https://docs.astro.build
-// Don't want to use any of this? Delete everything in this file, the `assets`, `components`, and `layouts` directories, and start fresh.
+export const prerender = false;
+
+// 1. Saved location (cookie) → 2. approximate network location → 3. default city.
+const token = Astro.cookies.get('laqi_loc')?.value;
+let place: Place | null = await resolveLocationToken(token).catch(() => null);
+let source: LocationSource = token?.startsWith('g:') ? 'precise' : 'saved';
+
+if (!place) {
+  const cf = Astro.request.cf as { latitude?: string; longitude?: string } | undefined;
+  const lat = Number(cf?.latitude);
+  const lon = Number(cf?.longitude);
+  if (cf?.latitude && cf?.longitude && Number.isFinite(lat) && Number.isFinite(lon)) {
+    const near = nearestCity(lat, lon);
+    if (near && near.distanceKm < 150) {
+      place = cityToPlace(near.city);
+      source = 'network';
+    }
+  }
+}
+if (!place) {
+  place = defaultPlace();
+  source = 'default';
+}
+
+const stdParam = Astro.url.searchParams.get('std');
+const standard = isStandardId(stdParam) ? stdParam : defaultStandardFor(place.cc);
+
+const [data, world] = await Promise.all([
+  loadDashboard(place),
+  getWorldSnapshot().catch((err): Snapshot | null => {
+    console.warn('[home] world snapshot unavailable:', err);
+    return null;
+  }),
+]);
+
+const ranked = (world?.readings ?? []).filter((r) => r.us !== null).sort((a, b) => b.us! - a.us!);
+const worst = ranked.slice(0, 5);
+const best = [...ranked].reverse().slice(0, 5);
+const total = ranked.length;
+const distribution = STANDARDS.us.categories.map((c) => ({
+  ...c,
+  count: ranked.filter((r) => categoryFor('us', r.us!).level === c.level).length,
+}));
+
+const site = Astro.site!.href.replace(/\/$/, '');
+const jsonLd = [
+  {
+    '@context': 'https://schema.org',
+    '@type': 'WebSite',
+    name: 'Live AQI',
+    url: `${site}/`,
+    description: 'Real-time air quality index worldwide with health recommendations and pollution alerts.',
+  },
+  {
+    '@context': 'https://schema.org',
+    '@type': 'Organization',
+    name: 'Live AQI',
+    url: `${site}/`,
+    logo: `${site}/icons/icon-512.png`,
+  },
+];
 ---
 
-<Layout>
-	<Welcome />
-</Layout>
+<BaseLayout
+  title="Live AQI – Real-Time Air Quality Index Worldwide"
+  description="Check real-time air quality worldwide with Live AQI. Monitor pollution levels, PM2.5, PM10, city rankings, health recommendations, and air quality alerts."
+  canonicalPath="/"
+  jsonLd={jsonLd}
+  theme={skyTheme(place, data.weather?.weather)}
+  currentPlace={{ name: place.name }}
+>
+  <PlaceDashboard data={data} standard={standard} shareUrl={`${site}/city/${place.slug}`}>
+    <LocationBar slot="top" source={source} name={place.name} />
+    <Fragment slot="utility">
+      <a href={`/city/${place.slug}`} class="btn btn-secondary">
+        <Icon name="external" size={17} />
+        City page
+      </a>
+      <a href="/alerts" class="btn btn-primary">
+        <Icon name="bell" size={17} />
+        Get alerts
+      </a>
+    </Fragment>
+  </PlaceDashboard>
+
+  <section class="stage" aria-labelledby="world-title">
+    <div class="shell py-20 lg:py-28">
+      <div class="grid gap-8 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] lg:items-end">
+        <h2 id="world-title" class="type-section max-w-3xl">
+          {total ? `The air in ${total} major cities, right now` : 'The air in the world’s major cities'}
+        </h2>
+        <div class="flex flex-wrap gap-2 lg:justify-self-end">
+          <a href="/map" class="btn btn-primary"><Icon name="map" size={17} /> Open the map</a>
+          <a href="/rankings" class="btn btn-ghost-dark">See all rankings</a>
+        </div>
+      </div>
+
+      {
+        world && total > 0 ? (
+          <>
+            <figure class="mt-14">
+              <div
+                class="flex h-7 gap-0.5"
+                role="img"
+                aria-label={`US AQI categories across ${total} cities: ${distribution.map((d) => `${d.label} ${d.count}`).join(', ')}`}
+              >
+                {distribution
+                  .filter((d) => d.count > 0)
+                  .map((d) => (
+                    <span
+                      class="flex items-center overflow-hidden rounded-ui px-2 font-mono text-[0.6875rem] font-bold"
+                      style={`flex:${d.count};background:${d.color};color:${d.ink}`}
+                      title={`${d.label}: ${d.count} of ${total} cities`}
+                    >
+                      {d.count / total >= 0.07 ? `${Math.round((d.count / total) * 100)}%` : ''}
+                    </span>
+                  ))}
+              </div>
+              <figcaption class="mt-3 flex flex-wrap gap-x-5 gap-y-1.5 text-sm text-on-stage-muted">
+                {distribution.map((d) => (
+                  <span class="flex items-center gap-1.5">
+                    <span class="swatch" style={`--cat:${d.color}`} />
+                    {d.label}
+                    <span class="type-code text-xs text-on-stage-faint">{d.count}</span>
+                  </span>
+                ))}
+              </figcaption>
+            </figure>
+
+            <div class="mt-14 grid grid-cols-1 gap-4 lg:grid-cols-2">
+              {[
+                { title: 'Most polluted right now', rows: worst, cap: 'Most polluted monitored cities' },
+                { title: 'Cleanest right now', rows: best, cap: 'Cleanest monitored cities' },
+              ].map((block) => (
+                <div class="utility-card p-5 text-ink sm:p-6">
+                  <h3 class="font-bold">{block.title}</h3>
+                  <div class="mt-3">
+                    <CityTable rows={block.rows} standard="us" caption={block.cap} compact boxed={false} />
+                  </div>
+                </div>
+              ))}
+            </div>
+            <p class="byline mt-8 text-sm text-on-stage-faint">
+              <span>US AQI, for global comparison</span>
+              <span>Valid {formatHour(world.validTime, 'UTC')} UTC</span>
+              <span>Fetched {relativeTime(world.fetchedAt)}</span>
+              <span>{total} of {world.requested} cities reporting</span>
+            </p>
+          </>
+        ) : (
+          <p class="mt-12 max-w-xl text-on-stage-muted">
+            Global rankings are unavailable because the data provider didn’t respond. Your local reading above isn’t affected.
+            Try again in a few minutes.
+          </p>
+        )
+      }
+    </div>
+  </section>
+</BaseLayout>

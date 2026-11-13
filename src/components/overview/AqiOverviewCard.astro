@@ -1,0 +1,95 @@
+---
+/** The glass AQI card from the mockup: place, live time, the number, category and scale. */
+import CategoryPill from '../aqi/CategoryPill.astro';
+import AqiScaleBar from '../aqi/AqiScaleBar.astro';
+import PollutantLabel from '../aqi/PollutantLabel.astro';
+import WeatherTiles from './WeatherTiles.astro';
+import Icon from '../ui/Icon.astro';
+import { STANDARDS, type StandardId } from '../../lib/aqi/standards';
+import { formatConcentration, isoTime } from '../../lib/format';
+import type { LocationReport } from '../../lib/services/reports';
+import type { Weather } from '../../lib/services/open-meteo';
+import { POLLUTANTS } from '../../lib/aqi/pollutants';
+
+interface Props {
+  report: LocationReport;
+  standard: StandardId;
+  weather: Weather | null;
+  /** Short line linking to the data panel, e.g. "17 stations nearby" or "CAMS model data". */
+  sourceLine: string;
+}
+
+const { report, standard, weather, sourceLine } = Astro.props;
+const { place, current } = report;
+const result = current.aqi[standard];
+const cat = result?.category;
+const def = STANDARDS[standard];
+const liveTime = (() => {
+  try {
+    const d = new Date(current.time * 1000);
+    const time = new Intl.DateTimeFormat('en-US', { timeZone: place.timezone, hour: 'numeric', minute: '2-digit', hour12: true }).format(d);
+    const day = new Intl.DateTimeFormat('en-US', { timeZone: place.timezone, month: 'short', day: 'numeric' }).format(d);
+    return `${time}, ${day}`;
+  } catch {
+    return '';
+  }
+})();
+const dominantValue = result ? current.concentrations[result.dominant] : undefined;
+---
+
+<div class="glass mx-auto w-full max-w-[24rem] px-5 pt-6 pb-5 text-center sm:px-6 lg:mx-0 lg:max-w-[22rem] lg:text-left">
+  <h1 id="hero-heading" class="flex items-center justify-center gap-1.5 text-lg font-bold tracking-[-0.01em] lg:justify-start">
+    <Icon name="pin" size={17} class="text-ink-2" />
+    <span class="[overflow-wrap:anywhere]">{place.name}</span>
+  </h1>
+  <p class="mt-1 flex items-center justify-center gap-1.5 text-[0.8125rem] text-ink-2 lg:justify-start">
+    <span class="size-2 rounded-full" style={`background:${cat?.color ?? 'var(--ink-3)'}`} aria-hidden="true"></span>
+    <span>Live</span>
+    <span aria-hidden="true">·</span>
+    <time datetime={isoTime(current.time)}>{liveTime}</time>
+  </p>
+  {place.region || place.country ? <p class="sr-only">{[place.region, place.country].filter(Boolean).join(', ')}</p> : null}
+
+  {
+    cat && result ? (
+      <>
+        <p class="label mt-5 text-ink-2">{def.shortName}</p>
+        <p
+          class="mt-1 text-[clamp(5rem,24vw,7rem)] leading-[0.95] font-extrabold tracking-[-0.045em] text-(--num-l) dark:text-(--num-d) lg:text-[6.5rem]"
+          style={`--num-l:${cat.text.light};--num-d:${cat.text.dark}`}
+        >
+          {result.beyondScale ? '500+' : result.aqi}
+        </p>
+        <div class="mt-3 flex justify-center lg:justify-start">
+          <CategoryPill category={cat} />
+        </div>
+        <p class="mt-2.5 text-sm text-ink-2">{cat.short}</p>
+        <AqiScaleBar standard={standard} value={result.aqi} class="mt-5" />
+      </>
+    ) : (
+      <p class="mt-6 text-sm text-ink-2">
+        There isn’t enough recent data to calculate the {def.shortName} here. Try the other standard, or check again shortly.
+      </p>
+    )
+  }
+
+  <div class="mt-5 space-y-2.5 lg:hidden">
+    {
+      result && (
+        <div class="glass-tile flex items-center justify-between gap-3 px-4 py-3 text-sm">
+          <span class="text-ink-2">
+            Main pollutant <strong class="font-bold text-ink"><PollutantLabel id={result.dominant} /></strong>
+          </span>
+          <span class="font-bold">
+            {formatConcentration(dominantValue)} <span class="font-semibold text-ink-2">{POLLUTANTS[result.dominant].displayUnit}</span>
+          </span>
+        </div>
+      )
+    }
+    <WeatherTiles weather={weather} variant="glass" />
+    <a href="#data" class="mt-1 inline-flex items-center gap-1 py-1.5 text-[0.8125rem] font-semibold text-ink-2 hover:text-ink">
+      {sourceLine}
+      <Icon name="chevron-right" size={14} />
+    </a>
+  </div>
+</div>

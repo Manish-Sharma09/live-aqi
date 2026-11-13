@@ -1,0 +1,131 @@
+---
+/**
+ * Generic, landmark-free city skyline in the flat layered style of the brand
+ * artwork. Seeded by the place so each city looks a little different but stays
+ * stable between visits. Colours come from theme variables (--city-*), so the
+ * same SVG works for day and night.
+ */
+interface Props {
+  seed: string;
+  class?: string;
+}
+const { seed, class: className } = Astro.props;
+
+function hash(s: string) {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
+  return h >>> 0;
+}
+function mulberry32(a: number) {
+  return () => {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const rand = mulberry32(hash(seed));
+const between = (a: number, b: number) => a + (b - a) * rand();
+const W = 1200;
+const H = 420;
+const GROUND = 404;
+const r1 = (n: number) => Math.round(n * 10) / 10;
+
+interface Block {
+  x: number;
+  w: number;
+  h: number;
+}
+function row(minW: number, maxW: number, minH: number, maxH: number, gapMax: number): Block[] {
+  const out: Block[] = [];
+  let x = -between(0, 30);
+  while (x < W) {
+    const w = between(minW, maxW);
+    // Taller buildings cluster near the middle, like a downtown.
+    const centre = 1 - Math.abs((x + w / 2 - W / 2) / (W / 2));
+    const h = between(minH, maxH) * (0.72 + 0.4 * centre);
+    out.push({ x, w, h });
+    x += w + between(2, gapMax);
+  }
+  return out;
+}
+
+const far = row(34, 80, 120, 230, 6);
+const mid = row(42, 92, 90, 200, 14);
+const near = row(46, 110, 46, 104, 10);
+
+// Two signature towers per skyline, placed by the seed.
+const towers = [0.3 + rand() * 0.12, 0.58 + rand() * 0.14].map((p, i) => ({
+  x: W * p,
+  w: i === 0 ? 46 : 56,
+  h: i === 0 ? between(250, 300) : between(220, 280),
+  spire: between(26, 48),
+}));
+
+function windows(b: Block, baseY: number) {
+  const cols = Math.max(1, Math.floor((b.w - 10) / 12));
+  const rows = Math.max(1, Math.floor((b.h - 18) / 16));
+  const cells: string[] = [];
+  for (let c = 0; c < cols; c++) {
+    for (let rr = 0; rr < rows; rr++) {
+      if (rand() < 0.42) continue;
+      cells.push(`<rect x="${r1(b.x + 7 + c * 12)}" y="${r1(baseY - b.h + 12 + rr * 16)}" width="5" height="8" rx="1"/>`);
+    }
+  }
+  return cells.join('');
+}
+
+const blocks = (list: Block[], baseY: number) =>
+  list
+    .map((b) => {
+      const stepped = rand() < 0.28 && b.w > 50;
+      const top = baseY - b.h;
+      return stepped
+        ? `<path d="M${r1(b.x)} ${baseY}V${r1(top + 14)}H${r1(b.x + b.w * 0.18)}V${r1(top)}H${r1(b.x + b.w * 0.82)}V${r1(top + 14)}H${r1(b.x + b.w)}V${baseY}Z"/>`
+        : `<rect x="${r1(b.x)}" y="${r1(top)}" width="${r1(b.w)}" height="${r1(b.h)}" rx="1.5"/>`;
+    })
+    .join('');
+
+const houses = near
+  .map((b) => {
+    if (rand() < 0.45) {
+      const roof = Math.min(28, b.w * 0.3);
+      const top = GROUND - b.h * 0.62;
+      return `<path d="M${r1(b.x)} ${GROUND}V${r1(top)}L${r1(b.x + b.w / 2)} ${r1(top - roof)}L${r1(b.x + b.w)} ${r1(top)}V${GROUND}Z"/>`;
+    }
+    return `<rect x="${r1(b.x)}" y="${r1(GROUND - b.h)}" width="${r1(b.w)}" height="${r1(b.h)}" rx="1.5"/>`;
+  })
+  .join('');
+
+const towerShapes = towers
+  .map((t) => {
+    const x = t.x;
+    const top = GROUND - 26 - t.h;
+    return `<path d="M${r1(x)} ${GROUND}V${r1(top + 30)}L${r1(x + 6)} ${r1(top + 18)}V${r1(top)}H${r1(x + t.w - 6)}V${r1(top + 18)}L${r1(x + t.w)} ${r1(top + 30)}V${GROUND}Z"/><rect x="${r1(x + t.w / 2 - 1.5)}" y="${r1(top - t.spire)}" width="3" height="${r1(t.spire)}" rx="1.5"/>`;
+  })
+  .join('');
+
+// Tree canopy along the front.
+const trees: string[] = [];
+for (let x = -20; x < W + 20; x += between(26, 46)) {
+  const r = between(14, 28);
+  trees.push(`<circle cx="${r1(x)}" cy="${r1(GROUND - r * 0.55)}" r="${r1(r)}"/>`);
+}
+const midWindows = mid.filter(() => rand() < 0.45).map((b) => windows(b, GROUND - 26)).join('');
+---
+
+<svg
+  viewBox={`0 0 ${W} ${H}`}
+  preserveAspectRatio="xMidYMax slice"
+  class:list={['block h-full w-full', className]}
+  aria-hidden="true"
+  focusable="false"
+>
+  <g fill="var(--city-far)" set:html={blocks(far, GROUND - 40)} />
+  <g fill="var(--city-mid)" set:html={blocks(mid, GROUND - 26) + towerShapes} />
+  <g fill="var(--city-window)" set:html={midWindows} />
+  <g fill="var(--city-near)" set:html={houses} />
+  <g fill="var(--city-front)" set:html={trees.join('')} />
+  <rect x="0" y={GROUND - 6} width={W} height={H - GROUND + 6} fill="var(--city-front)" />
+</svg>

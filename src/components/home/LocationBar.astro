@@ -1,0 +1,179 @@
+---
+import Icon from '../ui/Icon.astro';
+import LocationSearch from '../search/LocationSearch.astro';
+import type { LocationSource } from './types';
+
+interface Props {
+  source: LocationSource;
+  name: string;
+}
+const { source, name } = Astro.props;
+const note: Record<LocationSource, string> = {
+  precise: 'your location, from this device',
+  saved: 'your saved location',
+  network: 'approximate, from your network',
+  default: 'default location',
+};
+const askFirst = source === 'network' || source === 'default';
+---
+
+<div data-location-bar data-source={source}>
+  <div class="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
+    <p class="flex min-w-0 items-center gap-2 text-ink-2">
+      <Icon name="pin" size={16} />
+      <span class="truncate"><span class="font-semibold text-ink">{name}</span>, <span data-note>{note[source]}</span></span>
+    </p>
+    <p class="flex flex-wrap items-center gap-2">
+      <button type="button" data-locate class="inline-flex h-9 items-center gap-1.5 rounded-full border border-line bg-surface px-3.5 font-semibold text-ink hover:border-line-strong disabled:opacity-50">
+        <Icon name="locate" size={15} />
+        <span data-locate-label>{source === 'precise' ? 'Refresh my location' : 'Use my location'}</span>
+      </button>
+      <button type="button" data-change class="inline-flex h-9 items-center gap-1.5 rounded-full border border-line bg-surface px-3.5 font-semibold text-ink hover:border-line-strong" aria-expanded="false" aria-controls="change-location">
+        <Icon name="search" size={15} />
+        Change location
+      </button>
+    </p>
+  </div>
+
+  {
+    askFirst && (
+      <p data-geo-prompt hidden class="mt-2 max-w-2xl text-sm text-ink-2">
+        Allow location access to see the reading nearest you. Coordinates are rounded to about 1 km and stay on this device.{' '}
+        <button type="button" data-dismiss-prompt class="font-semibold text-ink underline underline-offset-4">
+          Not now
+        </button>
+      </p>
+    )
+  }
+
+  <p data-geo-status role="status" aria-live="polite" class="mt-2 text-sm font-semibold text-ink" hidden></p>
+
+  <div id="change-location" data-change-panel hidden class="mt-4 max-w-xl">
+    <LocationSearch
+      id="home-location-search"
+      mode="set-location"
+      label="Search for a city to use as your location"
+      placeholder="Search your city or town"
+    />
+  </div>
+</div>
+
+<script>
+  import { getSavedLocation, saveLocation } from '../../scripts/store';
+  import type { LaqiSearch } from '../../scripts/search-element';
+
+  const bar = document.querySelector<HTMLElement>('[data-location-bar]');
+  if (bar) {
+    const source = bar.dataset.source;
+    const status = bar.querySelector<HTMLElement>('[data-geo-status]')!;
+    const prompt = bar.querySelector<HTMLElement>('[data-geo-prompt]');
+    const changeBtn = bar.querySelector<HTMLButtonElement>('[data-change]')!;
+    const panel = bar.querySelector<HTMLElement>('[data-change-panel]')!;
+    const DISMISS_KEY = 'laqi:geo-prompt-dismissed';
+
+    const say = (msg: string) => {
+      status.textContent = msg;
+      status.hidden = !msg;
+    };
+
+    // The server's cookie can lag localStorage — re-sync at most once per session per token.
+    const saved = getSavedLocation();
+    if (saved && (source === 'network' || source === 'default')) {
+      try {
+        if (sessionStorage.getItem('laqi:resynced') !== saved.token) {
+          sessionStorage.setItem('laqi:resynced', saved.token);
+          window.location.reload();
+        }
+      } catch {
+        /* storage unavailable — skip the re-sync */
+      }
+    }
+
+    // A city chosen via device location is stored by slug; label it as device-derived.
+    if (saved?.precise && source === 'saved') {
+      const note = bar.querySelector('[data-note]');
+      if (note) note.textContent = 'your location, from this device';
+      const label = bar.querySelector('[data-locate-label]');
+      if (label) label.textContent = 'Refresh my location';
+    }
+
+    let dismissed = false;
+    try {
+      dismissed = localStorage.getItem(DISMISS_KEY) === '1';
+    } catch {
+      /* ignore */
+    }
+    if (prompt && !dismissed && 'geolocation' in navigator) prompt.hidden = false;
+
+    bar.querySelector('[data-dismiss-prompt]')?.addEventListener('click', () => {
+      if (prompt) prompt.hidden = true;
+      try {
+        localStorage.setItem(DISMISS_KEY, '1');
+      } catch {
+        /* ignore */
+      }
+    });
+
+    changeBtn.addEventListener('click', () => {
+      const open = changeBtn.getAttribute('aria-expanded') === 'true';
+      changeBtn.setAttribute('aria-expanded', String(!open));
+      panel.hidden = open;
+      if (!open) (panel.querySelector('laqi-search') as LaqiSearch | null)?.focusInput();
+    });
+
+    const setBusy = (busy: boolean) => bar!.querySelectorAll<HTMLButtonElement>('[data-locate]').forEach((b) => (b.disabled = busy));
+
+    function locate(silent = false) {
+      if (!('geolocation' in navigator)) {
+        say('This browser can’t share your location. Use Change location to pick your city.');
+        return;
+      }
+      if (!silent) say('Finding your location…');
+      setBusy(true);
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          try {
+            const { latitude, longitude } = pos.coords;
+            const res = await fetch(`/api/locate?lat=${latitude.toFixed(3)}&lon=${longitude.toFixed(3)}`);
+            if (!res.ok) throw new Error(String(res.status));
+            const loc = (await res.json()) as { token: string; name: string; subtitle: string; href: string };
+            const current = getSavedLocation();
+            saveLocation({ ...loc, precise: true });
+            if (current?.token === loc.token && silent) return;
+            say(`Showing air quality for ${loc.name}…`);
+            window.location.reload();
+          } catch {
+            say('Your position couldn’t be matched to a place. Use Change location to pick your city.');
+          } finally {
+            setBusy(false);
+          }
+        },
+        (err) => {
+          setBusy(false);
+          if (silent) return;
+          if (err.code === err.PERMISSION_DENIED) {
+            if (prompt) prompt.hidden = true;
+            say('Location access is blocked for this site. Allow it in your browser’s site settings, or use Change location.');
+          } else if (err.code === err.TIMEOUT) {
+            say('Finding your location took too long. Try again, or use Change location.');
+          } else {
+            say('Your location isn’t available right now. Try again, or use Change location.');
+          }
+        },
+        { enableHighAccuracy: false, timeout: 12000, maximumAge: 10 * 60 * 1000 },
+      );
+    }
+
+    bar.querySelectorAll('[data-locate]').forEach((b) => b.addEventListener('click', () => locate(false)));
+
+    if ('permissions' in navigator && (source === 'precise' || source === 'network' || source === 'default')) {
+      navigator.permissions
+        .query({ name: 'geolocation' as PermissionName })
+        .then((p) => {
+          if (p.state === 'granted' && source !== 'precise') locate(true);
+          if (p.state === 'denied' && prompt) prompt.hidden = true;
+        })
+        .catch(() => undefined);
+    }
+  }
+</script>

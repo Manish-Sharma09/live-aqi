@@ -1,0 +1,26 @@
+{
+	"$schema": "./node_modules/wrangler/config-schema.json",
+	"name": "live-aqi",
+	"compatibility_date": "2026-11-10",
+	"compatibility_flags": ["global_fetch_strictly_public"],
+	// Custom entry: Astro's request handler + a cron-driven push-alert sweep.
+	"main": "./src/worker.ts",
+	// Static assets are configured by the Astro adapter at build time (dist/client only).
+	// Shared cache for world/country snapshots and Web Push subscriptions.
+	// Wrangler provisions the namespace automatically on first deploy.
+	"kv_namespaces": [
+		{
+			"binding": "LIVE_AQI_KV"
+		}
+	],
+	"triggers": {
+		// Check subscribers' locations for AQI threshold crossings every 30 minutes.
+		"crons": ["*/30 * * * *"]
+	},
+	"vars": {
+		"VAPID_SUBJECT": "mailto:alerts@live-aqi.com"
+	},
+	"observability": {
+		"enabled": true
+	}
+}

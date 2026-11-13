@@ -1,0 +1,62 @@
+---
+/** Main pollutant + monitoring/source cards (desktop row under the trend). */
+import PollutantLabel from '../aqi/PollutantLabel.astro';
+import Icon from '../ui/Icon.astro';
+import { POLLUTANTS } from '../../lib/aqi/pollutants';
+import type { StandardId } from '../../lib/aqi/standards';
+import { formatConcentration } from '../../lib/format';
+import type { LocationReport } from '../../lib/services/reports';
+
+interface Props {
+  report: LocationReport;
+  standard: StandardId;
+  stationCount: number;
+  class?: string;
+}
+const { report, standard, stationCount, class: className } = Astro.props;
+const result = report.current.aqi[standard];
+const value = result ? report.current.concentrations[result.dominant] : undefined;
+const europe = report.source.dataset.includes('European');
+---
+
+<div class:list={['grid gap-4 sm:grid-cols-2', className]}>
+  <div class="card flex items-center gap-3.5 px-5 py-4">
+    <span class="grid size-11 shrink-0 place-items-center rounded-full bg-accent-soft text-accent-ink">
+      <Icon name="particles" size={20} />
+    </span>
+    <div class="min-w-0 flex-1">
+      <p class="text-sm whitespace-nowrap text-ink-3">Main pollutant</p>
+      <p class="text-xl leading-tight font-bold">{result ? <PollutantLabel id={result.dominant} /> : '—'}</p>
+    </div>
+    <div class="border-l border-line pl-3.5 text-right">
+      <p class="text-xl leading-tight font-bold whitespace-nowrap">{formatConcentration(value)}</p>
+      <p class="text-sm text-ink-3">{result ? POLLUTANTS[result.dominant].displayUnit : ''}</p>
+    </div>
+  </div>
+
+  <a href="#data" class="card group flex items-center gap-3.5 px-5 py-4 transition-colors hover:border-line-strong">
+    <span class="grid size-11 shrink-0 place-items-center rounded-full bg-accent-soft text-accent-ink">
+      <Icon name="antenna" size={20} />
+    </span>
+    {
+      stationCount > 0 ? (
+        <>
+          <div class="min-w-0 flex-1">
+            <p class="text-sm text-ink-3">Monitoring network</p>
+            <p class="text-xl leading-tight font-bold whitespace-nowrap">{stationCount} stations</p>
+            <p class="text-sm text-ink-2">within 40 km</p>
+          </div>
+        </>
+      ) : (
+        <>
+          <div class="min-w-0 flex-1">
+            <p class="text-sm text-ink-3">Data source</p>
+            <p class="text-xl leading-tight font-bold whitespace-nowrap">CAMS model</p>
+            <p class="text-sm text-ink-2">{europe ? '≈11 km' : '≈45 km'} grid</p>
+          </div>
+        </>
+      )
+    }
+    <Icon name="chevron-right" size={16} class="text-ink-3 transition-transform group-hover:translate-x-0.5" />
+  </a>
+</div>

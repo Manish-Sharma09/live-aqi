@@ -1,0 +1,66 @@
+---
+import Icon from '../ui/Icon.astro';
+import { categoryByLevel, type StandardId } from '../../lib/aqi/standards';
+import { formatDateTime, signed } from '../../lib/format';
+import type { ChangeSummary } from '../../lib/services/reports';
+
+interface Props {
+  changes: ChangeSummary;
+  standard: StandardId;
+  timezone: string;
+}
+
+const { changes, standard, timezone } = Astro.props;
+const tiles = [
+  { label: 'Since 1 hour ago', value: changes.h1 },
+  { label: 'Since 3 hours ago', value: changes.h3 },
+  { label: 'Since yesterday', value: changes.h24 },
+];
+const direction = (v: number | null) => (v === null ? 'No earlier reading' : v > 0 ? 'Worse' : v < 0 ? 'Better' : 'Unchanged');
+---
+
+<div class="grid gap-14 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-20">
+  <dl class="grid grid-cols-3 gap-6">
+    {
+      tiles.map((t) => (
+        <div>
+          <dt class="text-sm text-subtle">{t.label}</dt>
+          <dd class="mt-3">
+            <span class="flex items-center gap-1.5 text-[clamp(1.75rem,3.4vw,2.5rem)] leading-none font-bold tracking-[-0.04em] [font-stretch:112%]">
+              {t.value !== null && t.value !== 0 && <Icon name={t.value > 0 ? 'arrow-up' : 'arrow-down'} size={20} />}
+              {signed(t.value)}
+            </span>
+            <span class="mt-2 block text-sm text-muted">{direction(t.value)}</span>
+          </dd>
+        </div>
+      ))
+    }
+  </dl>
+
+  <div>
+    <h3 class="font-bold">Category changes in the last 48 hours</h3>
+    {
+      changes.events.length === 0 ? (
+        <p class="mt-3 text-muted">The category hasn’t changed in the last 48 hours.</p>
+      ) : (
+        <ol class="mt-4 border-l border-line">
+          {changes.events.map((e) => {
+            const from = categoryByLevel(standard, e.fromLevel);
+            const to = categoryByLevel(standard, e.toLevel);
+            const worse = e.toLevel > e.fromLevel;
+            return (
+              <li class="relative py-3 pl-6">
+                <span class="swatch absolute top-[1.1rem] -left-[0.3125rem]" style={`--cat:${to.color}`} />
+                <p class="text-sm text-subtle">{formatDateTime(e.time, timezone)}</p>
+                <p class="mt-0.5">
+                  {worse ? 'Worsened' : 'Improved'} from {from.label} to <span class="font-semibold">{to.label}</span>{' '}
+                  <span class="type-code text-sm text-subtle">AQI {e.aqi}</span>
+                </p>
+              </li>
+            );
+          })}
+        </ol>
+      )
+    }
+  </div>
+</div>

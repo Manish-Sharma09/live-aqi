@@ -1,0 +1,72 @@
+---
+/** Hourly median AQI across an area's monitored cities — smooth category-coloured line + table. */
+import { renderSoftChart } from '../../lib/chart/soft';
+import { niceCeil } from '../../lib/chart/trend';
+import { categoryFor, STANDARDS, type StandardId } from '../../lib/aqi/standards';
+import { formatDay } from '../../lib/format';
+
+interface Props {
+  times: number[];
+  values: Array<number | null>;
+  standard: StandardId;
+  timezone: string;
+  label: string;
+}
+const { times, values, standard, timezone, label } = Astro.props;
+const present = values.filter((v): v is number => v !== null);
+const maxV = present.length ? Math.max(...present) : 0;
+const bounds = standard === 'us' ? [50, 100, 150, 200, 300, 500] : [50, 100, 200, 300, 400, 500];
+const yMax = Math.max(100, bounds.find((b) => b >= maxV * 1.15) ?? niceCeil(maxV * 1.15));
+const hourOf = new Intl.DateTimeFormat('en-GB', { timeZone: timezone, hour: '2-digit', hour12: false });
+const xTicks = times
+  .map((t, i) => ({ i, t, h: Number(hourOf.format(t * 1000)) % 24 }))
+  .filter((x) => x.h === 0 && x.i > 0)
+  .map((x) => ({ index: x.i, label: formatDay(x.t, timezone).split(' ')[0]! }));
+
+const svg = renderSoftChart({
+  id: 'median-trend',
+  width: 960,
+  height: 260,
+  series: [{ values, color: 'categories', label: STANDARDS[standard].shortName }],
+  bands: STANDARDS[standard].categories.map((c) => ({ max: c.max === Infinity ? 1e6 : c.max, color: c.color })),
+  nowIndex: values.length - 1,
+  yMax,
+  gridlines: [1, 2, 3, 4].map((k) => Math.round((yMax / 4) * k)),
+  xTicks,
+  dots: xTicks.map((t) => t.index),
+  ariaLabel: `${label}. ${present.length ? `Range ${Math.min(...present)} to ${maxV}; latest ${present[present.length - 1]}.` : 'No data.'}`,
+});
+const daily = times.reduce<Array<{ t: number; vals: number[] }>>((acc, t, i) => {
+  const key = formatDay(t, timezone);
+  const last = acc[acc.length - 1];
+  const v = values[i];
+  if (!last || formatDay(last.t, timezone) !== key) acc.push({ t, vals: v === null ? [] : [v] });
+  else if (v !== null) last.vals.push(v);
+  return acc;
+}, []);
+---
+
+<div>
+  <Fragment set:html={svg} />
+  <details class="group mt-4">
+    <summary class="inline-flex cursor-pointer items-center gap-1 text-sm font-semibold text-ink-2 hover:text-ink">
+      <span class="transition-transform group-open:rotate-90" aria-hidden="true">›</span> Daily summary table
+    </summary>
+    <table class="data-table mt-3 max-w-xl">
+      <caption class="sr-only">{label}, daily range</caption>
+      <thead><tr><th scope="col">Day</th><th scope="col" class="num">Lowest</th><th scope="col" class="num">Highest</th><th scope="col">Worst category</th></tr></thead>
+      <tbody>
+        {
+          daily.map((d) => (
+            <tr>
+              <td>{formatDay(d.t, timezone)}</td>
+              <td class="num">{d.vals.length ? Math.min(...d.vals) : '—'}</td>
+              <td class="num">{d.vals.length ? Math.max(...d.vals) : '—'}</td>
+              <td>{d.vals.length ? categoryFor(standard, Math.max(...d.vals)).label : '—'}</td>
+            </tr>
+          ))
+        }
+      </tbody>
+    </table>
+  </details>
+</div>

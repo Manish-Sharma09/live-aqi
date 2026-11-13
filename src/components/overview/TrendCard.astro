@@ -1,0 +1,254 @@
+---
+/** "Air quality trend" card: smooth line chart with range + measure controls. */
+import { renderSoftChart } from '../../lib/chart/soft';
+import { buildSoftTrendSpec, rowsFor, type TrendPayload } from '../../lib/chart/trend';
+import { formatDateTime, formatNumber } from '../../lib/format';
+import { STANDARDS, type StandardId } from '../../lib/aqi/standards';
+import type { LocationReport } from '../../lib/services/reports';
+
+interface Props {
+  report: LocationReport;
+  standard: StandardId;
+  class?: string;
+}
+
+const { report, standard, class: className } = Astro.props;
+const payload: TrendPayload = { ...report.trend, standard };
+const svg = renderSoftChart(buildSoftTrendSpec(payload, '24h', 'aqi', 720, 240, 'trend-ssr'));
+const rows = rowsFor(payload, '24h');
+const tz = report.place.timezone;
+const cats = STANDARDS[standard].categories;
+const historyHours = payload.nowIndex + 1;
+---
+
+<section id="trends" aria-labelledby="trend-title" data-soft-trend class:list={['card relative scroll-mt-24 p-5 sm:p-6', className]}>
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <h2 id="trend-title" class="text-lg font-bold tracking-[-0.01em]">Air quality trend</h2>
+    <div class="flex flex-wrap gap-2">
+      <div class="seg" role="group" aria-label="Time range">
+        <button type="button" data-range="24h" aria-pressed="true">24 h</button>
+        <button type="button" data-range="7d" aria-pressed="false">7 days</button>
+        <button type="button" data-range="forecast" aria-pressed="false">Next 48 h</button>
+      </div>
+      <div class="seg" role="group" aria-label="Measure">
+        <button type="button" data-metric="aqi" aria-pressed="true">AQI</button>
+        <button type="button" data-metric="pm" aria-pressed="false">PM</button>
+      </div>
+    </div>
+  </div>
+  <p data-caption class="mt-1 text-sm text-ink-3">Hourly {STANDARDS[standard].shortName}, last 24 hours</p>
+  {historyHours < 24 && <p class="mt-1 text-sm text-ink-3">Only {historyHours} hours of history are available so far.</p>}
+
+  <div data-plot tabindex="0" class="relative mt-4 rounded-ui outline-offset-4 select-none" aria-describedby="trend-help">
+    <Fragment set:html={svg} />
+    <div
+      data-tooltip
+      hidden
+      class="pointer-events-none absolute top-0 z-10 min-w-[10rem] rounded-ui border border-line bg-surface px-3 py-2.5 text-sm shadow-pop"
+      role="status"
+      aria-live="polite"
+    >
+    </div>
+  </div>
+  <p id="trend-help" class="sr-only">Use the left and right arrow keys to move between hours.</p>
+
+  <div class="mt-4 flex flex-wrap items-center justify-between gap-3">
+    <ul data-legend-aqi class="flex flex-wrap gap-x-3.5 gap-y-1 text-xs text-ink-3" aria-label="Line colour by category">
+      {cats.map((c) => (
+        <li class="flex items-center gap-1.5" title={c.label}>
+          <span class="swatch" style={`--cat:${c.color}`}></span>
+          {c.key === 'usg' ? <><span aria-hidden="true">USG</span><span class="sr-only">{c.label}</span></> : c.label}
+        </li>
+      ))}
+    </ul>
+    <ul data-legend-pm hidden class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-3" aria-label="Series">
+      <li class="flex items-center gap-1.5"><span class="h-0.5 w-4 rounded-full bg-series-pm25"></span>PM2.5</li>
+      <li class="flex items-center gap-1.5"><span class="h-0.5 w-4 rounded-full bg-series-pm10"></span>PM10</li>
+    </ul>
+    <details class="group">
+      <summary class="inline-flex cursor-pointer items-center gap-1 text-xs font-semibold text-ink-2 hover:text-ink">
+        <span class="transition-transform group-open:rotate-90" aria-hidden="true">›</span> Data table
+      </summary>
+      <div class="relative mt-3 max-h-72 w-[min(34rem,calc(100vw-4rem))] overflow-auto">
+        <table class="data-table text-sm" data-table>
+          <caption class="sr-only">Hourly values</caption>
+          <thead><tr><th scope="col">Time</th><th scope="col" class="num">AQI</th><th scope="col">Category</th><th scope="col" class="num">PM2.5</th><th scope="col" class="num">PM10</th></tr></thead>
+          <tbody>
+            {[...rows].reverse().map((r) => (
+              <tr>
+                <td class="whitespace-nowrap">{formatDateTime(r.time, tz)}{r.forecast ? ' (forecast)' : ''}</td>
+                <td class="num">{r.aqi ?? '—'}</td>
+                <td>{r.category ?? '—'}</td>
+                <td class="num">{formatNumber(r.pm25, 1)}</td>
+                <td class="num">{formatNumber(r.pm10, 1)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </details>
+  </div>
+
+  <script type="application/json" data-trend-data set:html={JSON.stringify(payload)} />
+</section>
+
+<script>
+  import { renderSoftChart, softGeometry } from '../../lib/chart/soft';
+  import { buildSoftTrendSpec, RANGE_LABEL, rowsFor, type TrendMetric, type TrendPayload, type TrendRange, type TrendRow } from '../../lib/chart/trend';
+
+  const HEIGHT = 240;
+  let uid = 0;
+
+  for (const root of document.querySelectorAll<HTMLElement>('[data-soft-trend]')) {
+    const id = `trend-${++uid}`;
+    const payload = JSON.parse(root.querySelector('[data-trend-data]')!.textContent!) as TrendPayload;
+    const plot = root.querySelector<HTMLElement>('[data-plot]')!;
+    const tooltip = root.querySelector<HTMLElement>('[data-tooltip]')!;
+    const caption = root.querySelector<HTMLElement>('[data-caption]')!;
+    const tbody = root.querySelector<HTMLTableSectionElement>('[data-table] tbody')!;
+    const legendAqi = root.querySelector<HTMLElement>('[data-legend-aqi]')!;
+    const legendPm = root.querySelector<HTMLElement>('[data-legend-pm]')!;
+    const stdName = payload.standard === 'in' ? 'India NAQI' : 'US AQI';
+    let range: TrendRange = '24h';
+    let metric: TrendMetric = 'aqi';
+    let rows: TrendRow[] = rowsFor(payload, range);
+    let width = 720;
+    let active = -1;
+
+    const fmtTime = (t: number) => {
+      try {
+        return new Intl.DateTimeFormat('en-US', { timeZone: payload.timezone, weekday: 'short', hour: 'numeric', minute: '2-digit', hour12: true }).format(t * 1000);
+      } catch {
+        return new Date(t * 1000).toUTCString();
+      }
+    };
+    const fmt = (v: number | null, d = 1) => (v === null ? '—' : v.toFixed(d));
+    const el = (tag: string, cls: string, text?: string) => {
+      const n = document.createElement(tag);
+      n.className = cls;
+      if (text !== undefined) n.textContent = text;
+      return n;
+    };
+
+    function render() {
+      width = Math.max(280, Math.round(plot.clientWidth));
+      plot.querySelector('svg')?.remove();
+      plot.insertAdjacentHTML('afterbegin', renderSoftChart(buildSoftTrendSpec(payload, range, metric, width, HEIGHT, id)));
+      hideTip();
+    }
+
+    function updateText() {
+      rows = rowsFor(payload, range);
+      caption.textContent = `${metric === 'aqi' ? `Hourly ${stdName}` : 'Hourly PM2.5 and PM10, µg/m³'}, ${RANGE_LABEL[range]}`;
+      legendAqi.hidden = metric !== 'aqi';
+      legendPm.hidden = metric !== 'pm';
+      tbody.replaceChildren(
+        ...[...rows].reverse().map((r) => {
+          const tr = document.createElement('tr');
+          const cells: Array<[string, string]> = [
+            [fmtTime(r.time) + (r.forecast ? ' (forecast)' : ''), 'whitespace-nowrap'],
+            [r.aqi === null ? '—' : String(r.aqi), 'num'],
+            [r.category ?? '—', ''],
+            [fmt(r.pm25), 'num'],
+            [fmt(r.pm10), 'num'],
+          ];
+          for (const [text, cls] of cells) tr.appendChild(el('td', cls, text));
+          return tr;
+        }),
+      );
+    }
+
+    function hideTip() {
+      tooltip.hidden = true;
+      active = -1;
+      plot.querySelector('[data-crosshair]')?.setAttribute('opacity', '0');
+    }
+
+    function showTip(i: number) {
+      const r = rows[i];
+      if (!r) return hideTip();
+      active = i;
+      const g = softGeometry({ width, height: HEIGHT, count: rows.length });
+      const cx = g.x0 + g.step * i;
+      const ch = plot.querySelector('[data-crosshair]');
+      if (ch) {
+        ch.setAttribute('x1', String(cx));
+        ch.setAttribute('x2', String(cx));
+        ch.setAttribute('opacity', '1');
+      }
+      tooltip.replaceChildren();
+      tooltip.appendChild(el('p', 'text-xs font-semibold text-ink-3', fmtTime(r.time) + (r.forecast ? ' · forecast' : '')));
+      if (metric === 'aqi') {
+        const main = el('p', 'mt-1 flex items-center gap-2');
+        if (r.color) {
+          const sw = el('span', 'swatch');
+          sw.style.setProperty('--cat', r.color);
+          main.appendChild(sw);
+        }
+        main.appendChild(el('strong', 'text-lg font-bold', r.aqi === null ? '—' : String(r.aqi)));
+        main.appendChild(el('span', 'text-ink-2', r.category ?? stdName));
+        tooltip.appendChild(main);
+        tooltip.appendChild(el('p', 'mt-0.5 text-xs text-ink-3', `PM2.5 ${fmt(r.pm25)} · PM10 ${fmt(r.pm10)} µg/m³`));
+      } else {
+        for (const [label, v, cls] of [
+          ['PM2.5', r.pm25, 'bg-series-pm25'],
+          ['PM10', r.pm10, 'bg-series-pm10'],
+        ] as const) {
+          const row = el('p', 'mt-1 flex items-center gap-2');
+          row.appendChild(el('span', `h-0.5 w-4 rounded-full ${cls}`));
+          row.appendChild(el('strong', 'font-bold', fmt(v)));
+          row.appendChild(el('span', 'text-ink-3', `µg/m³ ${label}`));
+          tooltip.appendChild(row);
+        }
+      }
+      tooltip.hidden = false;
+      const tw = tooltip.offsetWidth;
+      tooltip.style.left = `${Math.min(Math.max(cx - tw / 2, 0), width - tw)}px`;
+      tooltip.style.top = `-${tooltip.offsetHeight + 8}px`;
+    }
+
+    plot.addEventListener('pointermove', (e) => {
+      const rect = plot.getBoundingClientRect();
+      const g = softGeometry({ width, height: HEIGHT, count: rows.length });
+      const i = Math.round((e.clientX - rect.left - g.x0) / g.step);
+      if (i < 0 || i >= rows.length) hideTip();
+      else if (i !== active) showTip(i);
+    });
+    plot.addEventListener('pointerleave', hideTip);
+    plot.addEventListener('blur', hideTip);
+    plot.addEventListener('keydown', (e) => {
+      const last = rows.length - 1;
+      let next = active;
+      if (e.key === 'ArrowRight') next = active < 0 ? last : Math.min(last, active + 1);
+      else if (e.key === 'ArrowLeft') next = active < 0 ? last : Math.max(0, active - 1);
+      else if (e.key === 'Home') next = 0;
+      else if (e.key === 'End') next = last;
+      else if (e.key === 'Escape') return hideTip();
+      else return;
+      e.preventDefault();
+      showTip(next);
+    });
+
+    const bind = (attr: 'range' | 'metric') =>
+      root.querySelectorAll<HTMLButtonElement>(`[data-${attr}]`).forEach((b) =>
+        b.addEventListener('click', () => {
+          if (attr === 'range') range = b.dataset.range as TrendRange;
+          else metric = b.dataset.metric as TrendMetric;
+          root.querySelectorAll(`[data-${attr}]`).forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+          updateText();
+          render();
+        }),
+      );
+    bind('range');
+    bind('metric');
+
+    let raf = 0;
+    new ResizeObserver(() => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        if (Math.abs(plot.clientWidth - width) > 2) render();
+      });
+    }).observe(plot);
+    render();
+  }
+</script>

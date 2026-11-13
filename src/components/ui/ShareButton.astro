@@ -1,0 +1,55 @@
+---
+import Icon from './Icon.astro';
+
+interface Props {
+  url: string;
+  title: string;
+  text: string;
+  /** Icon-only on large screens (utility rail); labelled on small screens. */
+  compact?: boolean;
+  class?: string;
+}
+const { url, title, text, compact = false, class: className } = Astro.props;
+---
+
+<button
+  type="button"
+  data-share
+  data-url={url}
+  data-title={title}
+  data-text={text}
+  aria-label={compact ? 'Share this reading' : undefined}
+  title={compact ? 'Share' : undefined}
+  class:list={['btn btn-ghost-dark', compact && 'lg:btn-icon', className]}
+>
+  <Icon name="share" size={18} />
+  <span data-share-label class:list={[compact && 'lg:sr-only']}>Share</span>
+</button>
+
+<script>
+  document.querySelectorAll<HTMLButtonElement>('[data-share]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const { url = location.href, title = document.title, text = '' } = btn.dataset;
+      const label = btn.querySelector('[data-share-label]');
+      if (navigator.share) {
+        try {
+          await navigator.share({ url, title, text });
+          return;
+        } catch (err) {
+          if ((err as Error).name === 'AbortError') return;
+        }
+      }
+      try {
+        await navigator.clipboard.writeText(url);
+        if (label) label.textContent = 'Link copied';
+        btn.setAttribute('title', 'Link copied');
+      } catch {
+        if (label) label.textContent = 'Copy failed';
+      }
+      setTimeout(() => {
+        if (label) label.textContent = 'Share';
+        btn.setAttribute('title', 'Share');
+      }, 2500);
+    });
+  });
+</script>

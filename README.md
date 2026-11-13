@@ -5,7 +5,8 @@ standards, pollutant breakdown, 7-day history and 48-hour forecast, health guida
 rankings, country/region dashboards, and pollution alerts (in-page and background Web Push).
 
 Built with **Astro 7** (on-demand rendering), **Tailwind CSS v4**, and deployed to **Cloudflare Workers**.
-The visual system follows `../DESIGN.md` (black “stage” → white reading surface, colour only in the data).
+The visual system is the “soft sky” day/night design (see `.docs/design-system-context.md` and `/styleguide`): the page
+shows the sky over each city — day or night — with a glass AQI card over the skyline.
 
 ## Quick start
 
@@ -98,7 +99,4 @@ npm run brand-assets   # favicons, app icons, notification badge, OG image
 
 ## Fonts
 
-`DESIGN.md` specifies Martian Grotesk, which is a commercial typeface. The site uses **Archivo** (OFL) as the
-grotesk and **Martian Mono** (OFL, by Evil Martians) for figures, both self-hosted via Astro’s Fonts API.
-Swap in Martian Grotesk through `astro.config.mjs` once licensed.
-# live-aqi
+Plus Jakarta Sans (variable, OFL) is self-hosted from `src/assets/fonts/` via Astro’s Fonts API.

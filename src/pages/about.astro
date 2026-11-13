@@ -1,0 +1,73 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Icon from '../components/ui/Icon.astro';
+
+export const prerender = false;
+Astro.cache.set({ maxAge: 86400, swr: 604800 });
+
+const principles = [
+  ['Real data or nothing', 'Every value comes from a live data source and is labelled with its time and origin. If a source is down, we say so instead of guessing.'],
+  ['Standards, not slogans', 'We compute the US EPA AQI and India’s National AQI exactly as their authorities define them — and never mix the two.'],
+  ['Advice you can act on', 'Each reading comes with the official health statement and practical steps, adjusted for what is actually in the air.'],
+  ['Alerts that respect you', 'You choose the place and the level. We notify you when the situation changes — not every time a page loads.'],
+];
+---
+
+<BaseLayout
+  title="About Live AQI — Real-Time Air Quality for Everyone"
+  description="Live AQI shows real-time air quality for every city in the world, with health guidance and alerts. Learn what we do, where the data comes from and our principles."
+  canonicalPath="/about"
+>
+  <section class="stage">
+    <div class="shell pt-10 pb-14 lg:pt-14 lg:pb-20">
+      <h1 class="type-hero max-w-5xl">The air you breathe, made visible.</h1>
+      <p class="mt-6 max-w-2xl text-lg text-on-stage-muted">
+        Air pollution is invisible until it isn’t. Live AQI turns live atmospheric data into a clear answer to one question:
+        is the air safe for me right now, and what should I do about it?
+      </p>
+      <ul class="mt-10 flex flex-wrap gap-2" aria-label="Topics">
+        <li class="chip">Air quality</li><li class="chip">Health</li><li class="chip">Open data</li>
+      </ul>
+    </div>
+  </section>
+
+  <div class="shell py-12 lg:py-16">
+    <div class="grid gap-x-16 gap-y-12 border-t border-line pt-12 sm:grid-cols-2">
+      {
+        principles.map(([title, text]) => (
+          <div>
+            <h2 class="type-title text-[1.75rem]">{title}</h2>
+            <p class="mt-3 text-muted">{text}</p>
+          </div>
+        ))
+      }
+    </div>
+
+    <div class="prose-reading mt-16">
+      <h2>What Live AQI does</h2>
+      <ul>
+        <li>Shows the current air quality for your location — or any city, town or region on Earth — with the main pollutant, PM₂.₅, PM₁₀ and weather.</li>
+        <li>Explains what the reading means for your health, using the official statement for the index plus practical steps.</li>
+        <li>Charts the last 24 hours and 7 days, and the model forecast for the next 48 hours.</li>
+        <li>Maps and ranks the world’s major cities, and breaks each country down by city and region.</li>
+        <li>Sends alerts when the air at your chosen place crosses the level you choose.</li>
+      </ul>
+      <h2>Where the numbers come from</h2>
+      <p>
+        Live AQI computes every index itself from hourly pollutant concentrations produced by the Copernicus Atmosphere
+        Monitoring Service (CAMS) and delivered by Open-Meteo. Model data gives every place a consistent reading, with
+        history and forecasts; it can differ from a nearby ground monitor. Read the full <a href="/methodology">methodology</a>.
+      </p>
+      <h2>What Live AQI is not</h2>
+      <p>
+        Live AQI is an information service. It is not a medical service and does not issue official advisories or
+        emergency warnings — for those, follow your local health and environment authorities.
+      </p>
+    </div>
+
+    <div class="mt-12 flex flex-wrap gap-3">
+      <a href="/" class="btn btn-ink">Check your air <Icon name="arrow-right" size={16} /></a>
+      <a href="/alerts" class="btn btn-outline"><Icon name="bell" size={17} /> Set up alerts</a>
+    </div>
+  </div>
+</BaseLayout>
