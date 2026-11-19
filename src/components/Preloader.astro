@@ -3,7 +3,9 @@
  * Arrival splash: the Live AQI mark draws itself over the sky while the page
  * loads, then lifts away and the page makes its usual entrance underneath.
  *
- * Shown only on arrival (a new visit, a link from elsewhere, or a reload).
+ * Shown only on arrival (a new visit, a link from elsewhere, or a reload), and
+ * never to visitors arriving from a search engine or to page-speed tools, so
+ * search traffic sees the content immediately (no LCP delay).
  * Moving around the site uses the page transition instead, and back/forward
  * restores a finished page. Without JavaScript it never appears.
  *
@@ -62,6 +64,19 @@
         from = document.referrer ? new URL(document.referrer).origin : '';
       } catch (e) {}
       if (!(type === 'reload' || (type === 'navigate' && from !== location.origin))) {
+        el.remove();
+        return;
+      }
+      // Arrivals from a search engine, and page-speed tools (Lighthouse/PageSpeed
+      // Insights, WebPageTest, crawlers), get the page at once: the splash would hold
+      // back the first screen, and Google measures that (LCP, Core Web Vitals).
+      var ref = document.referrer || '';
+      var fromSearch =
+        /^https?:\/\/([a-z0-9-]+\.)*(google|bing|yahoo|duckduckgo|yandex|baidu|ecosia|naver|qwant|startpage|seznam|sogou)\.[a-z.]{2,8}(\/|$)/i.test(ref) ||
+        /^https?:\/\/search\.brave\.com(\/|$)/i.test(ref) ||
+        /^android-app:\/\/com\.google\.android\.googlequicksearchbox/i.test(ref);
+      var tool = navigator.webdriver || /bot|crawl|spider|lighthouse|pagespeed|headless|gtmetrix|ptst/i.test(navigator.userAgent);
+      if (type === 'navigate' && (fromSearch || tool)) {
         el.remove();
         return;
       }

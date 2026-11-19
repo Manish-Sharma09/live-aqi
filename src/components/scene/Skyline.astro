@@ -4,6 +4,11 @@
  * artwork. Seeded by the place so each city looks a little different but stays
  * stable between visits. Colours come from theme variables (--city-*), so the
  * same SVG works for day and night.
+ *
+ * Snow caps (roofs, tower tops, tree crowns, the street) are drawn for every
+ * skyline but hidden; SkyScene shows them while it snows ([data-sky~='snow']).
+ * They are traced from the same shapes and use no extra random numbers, so a
+ * city's skyline never changes because of them.
  */
 interface Props {
   seed: string;
@@ -76,27 +81,38 @@ function windows(b: Block, baseY: number) {
   return cells.join('');
 }
 
-const blocks = (list: Block[], baseY: number) =>
+/** Snow on a flat roof from x to x+w at height y. */
+const cap = (x: number, y: number, w: number) => `<rect x="${r1(x - 1.5)}" y="${r1(y - 3.5)}" width="${r1(w + 3)}" height="5.5" rx="2.75"/>`;
+
+const blocks = (list: Block[], baseY: number, caps: string[]) =>
   list
     .map((b) => {
       const stepped = rand() < 0.28 && b.w > 50;
       const top = baseY - b.h;
+      if (stepped) caps.push(cap(b.x + b.w * 0.18, top, b.w * 0.64), cap(b.x, top + 14, b.w * 0.18), cap(b.x + b.w * 0.82, top + 14, b.w * 0.18));
+      else caps.push(cap(b.x, top, b.w));
       return stepped
         ? `<path d="M${r1(b.x)} ${baseY}V${r1(top + 14)}H${r1(b.x + b.w * 0.18)}V${r1(top)}H${r1(b.x + b.w * 0.82)}V${r1(top + 14)}H${r1(b.x + b.w)}V${baseY}Z"/>`
         : `<rect x="${r1(b.x)}" y="${r1(top)}" width="${r1(b.w)}" height="${r1(b.h)}" rx="1.5"/>`;
     })
     .join('');
 
+const houseCaps: string[] = []; // flat roofs
+const roofLines: string[] = []; // pitched roofs (stroked)
 const houses = near
   .map((b) => {
     if (rand() < 0.45) {
       const roof = Math.min(28, b.w * 0.3);
       const top = GROUND - b.h * 0.62;
+      roofLines.push(`M${r1(b.x - 1)} ${r1(top + 0.5)}L${r1(b.x + b.w / 2)} ${r1(top - roof - 1.5)}L${r1(b.x + b.w + 1)} ${r1(top + 0.5)}`);
       return `<path d="M${r1(b.x)} ${GROUND}V${r1(top)}L${r1(b.x + b.w / 2)} ${r1(top - roof)}L${r1(b.x + b.w)} ${r1(top)}V${GROUND}Z"/>`;
     }
+    houseCaps.push(cap(b.x, GROUND - b.h, b.w));
     return `<rect x="${r1(b.x)}" y="${r1(GROUND - b.h)}" width="${r1(b.w)}" height="${r1(b.h)}" rx="1.5"/>`;
   })
   .join('');
+
+const towerCaps = towers.map((t) => cap(t.x + 6, GROUND - 26 - t.h, t.w - 12)).join('');
 
 const towerShapes = towers
   .map((t) => {
@@ -108,11 +124,20 @@ const towerShapes = towers
 
 // Tree canopy along the front.
 const trees: string[] = [];
+const treeCaps: string[] = [];
 for (let x = -20; x < W + 20; x += between(26, 46)) {
   const r = between(14, 28);
-  trees.push(`<circle cx="${r1(x)}" cy="${r1(GROUND - r * 0.55)}" r="${r1(r)}"/>`);
+  const cy = GROUND - r * 0.55;
+  trees.push(`<circle cx="${r1(x)}" cy="${r1(cy)}" r="${r1(r)}"/>`);
+  // The crown's upper arc, closed by a gentle sag underneath.
+  const k = r * 0.866;
+  treeCaps.push(`<path d="M${r1(x - k)} ${r1(cy - r * 0.5)}A${r1(r)} ${r1(r)} 0 0 1 ${r1(x + k)} ${r1(cy - r * 0.5)}Q${r1(x)} ${r1(cy - r * 0.18)} ${r1(x - k)} ${r1(cy - r * 0.5)}Z"/>`);
 }
 const midWindows = mid.filter(() => rand() < 0.45).map((b) => windows(b, GROUND - 26)).join('');
+const farCaps: string[] = [];
+const midCaps: string[] = [];
+const farShapes = blocks(far, GROUND - 40, farCaps);
+const midShapes = blocks(mid, GROUND - 26, midCaps);
 ---
 
 <svg
@@ -122,10 +147,16 @@ const midWindows = mid.filter(() => rand() < 0.45).map((b) => windows(b, GROUND 
   aria-hidden="true"
   focusable="false"
 >
-  <g fill="var(--city-far)" set:html={blocks(far, GROUND - 40)} />
-  <g fill="var(--city-mid)" set:html={blocks(mid, GROUND - 26) + towerShapes} />
+  <g fill="var(--city-far)" set:html={farShapes} />
+  <g class="sky-snow" fill="var(--snow-cap)" opacity="0.7" set:html={farCaps.join('')} />
+  <g fill="var(--city-mid)" set:html={midShapes + towerShapes} />
+  <g class="sky-snow" fill="var(--snow-cap)" opacity="0.85" set:html={midCaps.join('') + towerCaps} />
   <g fill="var(--city-window)" set:html={midWindows} />
   <g fill="var(--city-near)" set:html={houses} />
+  <g class="sky-snow" fill="var(--snow-cap)" set:html={houseCaps.join('')} />
+  <path class="sky-snow" d={roofLines.join('')} fill="none" stroke="var(--snow-cap)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" />
   <g fill="var(--city-front)" set:html={trees.join('')} />
+  <g class="sky-snow" fill="var(--snow-cap)" set:html={treeCaps.join('')} />
   <rect x="0" y={GROUND - 6} width={W} height={H - GROUND + 6} fill="var(--city-front)" />
+  <rect class="sky-snow" x="0" y={GROUND - 7} width={W} height="6" rx="3" fill="var(--snow-cap)" />
 </svg>

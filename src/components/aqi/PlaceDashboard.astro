@@ -51,6 +51,8 @@ const sourceLine = stationCount > 0 ? `${stationCount} monitoring stations nearb
         <div class="mt-4 grid gap-5 lg:grid-cols-[minmax(0,1.04fr)_minmax(0,1fr)] lg:gap-6">
           <SkyScene
             slug={place.slug}
+            weather={weather?.weather}
+            pm25={report.current.concentrations.pm25}
             class="flex flex-col justify-end px-4 pt-[8.5rem] pb-4 sm:px-6 sm:pt-[10rem] sm:pb-6 lg:min-h-[35rem] lg:justify-center lg:px-10 lg:py-10"
           >
             <AqiOverviewCard report={report} standard={standard} weather={weather?.weather ?? null} sourceLine={sourceLine} />
@@ -116,7 +118,7 @@ const sourceLine = stationCount > 0 ? `${stationCount} monitoring stations nearb
         )}
       </>
     ) : (
-      <SkyScene slug={place.slug} class="mt-4 px-4 pt-[8.5rem] pb-6 sm:px-8 lg:min-h-[28rem] lg:p-10">
+      <SkyScene slug={place.slug} weather={weather?.weather} class="mt-4 px-4 pt-[8.5rem] pb-6 sm:px-8 lg:min-h-[28rem] lg:p-10">
         <div class="glass max-w-xl p-6">
           <h1 id="hero-heading" class="type-title">{place.name}</h1>
           <p class="mt-1 text-ink-2">{[place.region, place.country].filter(Boolean).join(', ')}</p>

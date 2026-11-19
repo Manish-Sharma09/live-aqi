@@ -51,8 +51,11 @@ descriptions, headings, body copy and link text instead.
 - **Sitemap:** adds the 12 continent rankings, e.g. `/rankings?region=AS`, which targets "most polluted cities in Asia".
 - **Already fine:** one H1 per page, canonical URLs that drop `?std=`, image alt text, real 404s, `/api/` disallowed,
   pages ~30–50 KB gzipped.
-- **Open:** the arrival splash (`Preloader.astro`) holds the first screen for about 1–4 s for every visitor who
-  arrives from another site, Google included. That delays LCP (Core Web Vitals) for search traffic.
+- **Fixed (19 Nov 2026):** the arrival splash (`Preloader.astro`) used to hold the first screen for about 1–4 s for
+  every visitor from another site, Google included, delaying LCP. It is now skipped for search-engine referrers
+  (Google, Bing, Yahoo, DuckDuckGo, Yandex, Baidu, Ecosia, Brave and others, plus the Google app) and for page-speed
+  tools and crawlers (Lighthouse/PageSpeed Insights, WebPageTest, headless browsers). Direct visits, reloads and links
+  from social media still get the splash.
 
 ## On-page content and site pages (19 Nov 2026)
 

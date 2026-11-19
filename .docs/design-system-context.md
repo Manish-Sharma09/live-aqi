@@ -62,6 +62,11 @@ markup keeps working; prefer the new names in new code.
 - CSS components: `.card`, `.tile`, `.glass`, `.glass-tile`, `.btn` (+ `-primary`, `-secondary`), `.chip`, `.seg`,
   `.aqi-badge`, `.swatch`, `.byline`, `.data-table`, `.prose-reading`.
 
+- Weather sky: `SkyScene` takes `weather` + `pm25`; `[data-sky]` tokens (`snow`, `rain`, `drizzle`, `storm`, `overcast`,
+  `fog`, `smog`, `smog-heavy`, `heat`) retint `--sky-*`/`--cloud`, dim the sun and stars, and show rooftop snow
+  (`--snow-cap`, `.sky-snow` in `Skyline`). Particles, haze and lightning are painted by `src/scripts/weather-fx.ts`
+  under the AQI card, so the card stays readable. Preview with `?wx=<preset>`.
+
 ## Data honesty in the UI
 - The mockup's “17 stations · 16 contributors” only appears when ground-station data (WAQI) is configured; otherwise
   the card states the real source (CAMS model and grid size). Never show sample readings, including in the styleguide.

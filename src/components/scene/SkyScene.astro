@@ -6,15 +6,27 @@
  * The default slot is layered on top (the glass AQI card).
  * Motion (liquid.css / motion.ts): clouds drift, the sun or moon glows softly, a few
  * stars twinkle, and layers shift slightly with the pointer ([data-depth]).
+ *
+ * Weather (src/lib/scene/weather.ts): the place's current weather and PM2.5 tint the
+ * sky ([data-sky] tokens, styles below), settle snow on the rooftops, and drive the
+ * canvas effects in src/scripts/weather-fx.ts (snow, rain, lightning, fog, haze, heat).
+ * Preview any sky with ?wx=snow (presets in weather.ts).
  */
 import Skyline from './Skyline.astro';
+import type { Weather } from '../../lib/services/open-meteo';
+import { hasWeatherEffects, skyTokens, skyWeather } from '../../lib/scene/weather';
 
 interface Props {
   slug: string;
   class?: string;
+  /** Current weather at the place, for the sky's weather effects. */
+  weather?: Weather | null | undefined;
+  /** Current PM2.5 (µg/m³), shown as haze when the air is polluted. */
+  pm25?: number | null | undefined;
 }
-const { slug, class: className } = Astro.props;
+const { slug, class: className, weather, pm25 } = Astro.props;
 const isKualaLumpur = slug === 'kuala-lumpur';
+const wx = skyWeather(weather, pm25);
 
 // Deterministic star field.
 let seed = 7;
@@ -25,6 +37,9 @@ const stars = Array.from({ length: 46 }, () => ({ x: rnd() * 100, y: rnd() * 58,
 <div
   class:list={['scene hero-scene vt-sky relative isolate overflow-hidden rounded-scene', className]}
   style="background: linear-gradient(180deg, var(--sky-top) 0%, var(--sky-mid) 52%, var(--sky-bottom) 100%)"
+  data-sky={skyTokens(wx)}
+  data-wx={JSON.stringify(wx)}
+  data-wx-active={hasWeatherEffects(wx) ? '' : undefined}
 >
   <svg class="sky-stars pointer-events-none absolute inset-0 -z-10 h-full w-full" data-depth style="--depth:2" aria-hidden="true" focusable="false">
     {stars.map((s) => <circle cx={`${s.x.toFixed(2)}%`} cy={`${s.y.toFixed(2)}%`} r={s.r.toFixed(2)} fill="var(--star)" opacity={s.o.toFixed(2)} />)}
@@ -94,5 +109,146 @@ const stars = Array.from({ length: 46 }, () => ({ x: rnd() * 100, y: rnd() * 58,
     }
   </div>
 
+  <!-- Weather effects, painted over the skyline and under the AQI card (weather-fx.ts). -->
+  <canvas data-wx-canvas class="sky-wx pointer-events-none absolute inset-0 -z-10 h-full w-full" aria-hidden="true"></canvas>
+
   <slot />
 </div>
+
+<script>
+  // Load the weather effects only where the sky has weather (or ?wx= asks for a preview),
+  // after the arrival splash has lifted.
+  const preview = new URLSearchParams(location.search).get('wx');
+  const scenes = [...document.querySelectorAll<HTMLElement>('.scene[data-wx]')].filter(
+    (s) => preview || s.hasAttribute('data-wx-active'),
+  );
+  if (scenes.length) {
+    const start = () =>
+      import('../../scripts/weather-fx')
+        .then((m) => scenes.forEach((s) => m.mountWeather(s, preview)))
+        .catch((err) => console.warn('[weather-fx]', err));
+    if (document.documentElement.classList.contains('preloading')) addEventListener('laqi:preloaded', start, { once: true });
+    else start();
+  }
+</script>
+
+<style is:global>
+  /* ------------------------------------------------ weather in the sky */
+  .sky-wx {
+    opacity: 0;
+    transition: opacity var(--wx-fade, 1400ms) var(--ease-out);
+  }
+  .sky-wx.is-on {
+    opacity: 1;
+  }
+
+  /* Sky colour under cloud, storm, snow, fog, haze and heat (day, then night). */
+  .scene[data-sky~='overcast'] {
+    --sky-top: #9fb0c3;
+    --sky-mid: #c6d1dd;
+    --sky-bottom: #e2e8ef;
+    --cloud: rgb(226 232 240 / 0.95);
+  }
+  .scene[data-sky~='snow'] {
+    --sky-top: #a3b4c7;
+    --sky-mid: #ccd7e2;
+    --sky-bottom: #e9eef4;
+  }
+  .scene[data-sky~='storm'] {
+    --sky-top: #6d7b8f;
+    --sky-mid: #97a3b3;
+    --sky-bottom: #c1c9d3;
+    --cloud: rgb(150 160 175 / 0.95);
+  }
+  .scene[data-sky~='fog'] {
+    --sky-top: #c3ccd6;
+    --sky-mid: #d9dfe6;
+    --sky-bottom: #eaedf1;
+  }
+  .scene[data-sky~='smog-heavy'] {
+    --sky-top: #aab3b8;
+    --sky-mid: #d0cbbe;
+    --sky-bottom: #e7e0d2;
+    --cloud: rgb(222 216 202 / 0.8);
+  }
+  .scene[data-sky~='heat'] {
+    --sky-top: #86bdf0;
+    --sky-mid: #f0dcb6;
+    --sky-bottom: #fbe6c4;
+  }
+  [data-theme='dark'] .scene[data-sky~='overcast'] {
+    --sky-top: #070d1c;
+    --sky-mid: #111a2e;
+    --sky-bottom: #1e2843;
+    --cloud: rgb(255 255 255 / 0.07);
+  }
+  [data-theme='dark'] .scene[data-sky~='snow'] {
+    --sky-top: #0d1527;
+    --sky-mid: #1b2640;
+    --sky-bottom: #2c3a5a;
+  }
+  [data-theme='dark'] .scene[data-sky~='storm'] {
+    --sky-top: #03060d;
+    --sky-mid: #0a101d;
+    --sky-bottom: #161e31;
+  }
+  [data-theme='dark'] .scene[data-sky~='fog'] {
+    --sky-top: #101828;
+    --sky-mid: #1b2438;
+    --sky-bottom: #2a3449;
+  }
+  [data-theme='dark'] .scene[data-sky~='smog-heavy'] {
+    --sky-top: #0e1117;
+    --sky-mid: #221f1d;
+    --sky-bottom: #3a3127;
+  }
+  [data-theme='dark'] .scene[data-sky~='heat'] {
+    --sky-top: #040b20;
+    --sky-mid: #0f1834;
+    --sky-bottom: #2a2440;
+  }
+
+  /* Behind cloud, fog or thick haze the sun is a pale disc and the stars are gone. */
+  .scene:is([data-sky~='overcast'], [data-sky~='smog-heavy']) .sky-glow {
+    opacity: 0.28;
+    filter: blur(1.5px) saturate(0.6);
+  }
+  .scene[data-sky~='smog-heavy']:not([data-sky~='overcast']) .sky-glow {
+    opacity: 0.6;
+    filter: sepia(0.55) saturate(0.8) blur(0.5px);
+  }
+  .scene[data-sky~='heat'] .sky-glow {
+    filter: drop-shadow(0 0 28px rgb(255 196 100 / 0.75)) brightness(1.06);
+  }
+  .scene:is([data-sky~='overcast'], [data-sky~='smog-heavy']) .sky-stars {
+    opacity: 0;
+  }
+  /* Fog swallows the clouds. */
+  .scene[data-sky~='fog'] .sky-cloud {
+    opacity: 0.3;
+  }
+
+  /* Snow settles on roofs, tower tops, tree crowns and the street while it snows. */
+  :root {
+    --snow-cap: #ffffff;
+  }
+  [data-theme='dark'] {
+    --snow-cap: #d3ddef;
+  }
+  .scene .sky-snow {
+    display: none;
+  }
+  .scene[data-sky~='snow'] .sky-snow {
+    display: inline;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .scene[data-sky~='snow'] .sky-snow {
+      animation: sky-snow-settle 3.2s var(--ease-out) 0.6s both;
+    }
+  }
+  @keyframes sky-snow-settle {
+    from {
+      opacity: 0;
+    }
+  }
+</style>

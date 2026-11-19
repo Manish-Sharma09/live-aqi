@@ -80,6 +80,22 @@ The **Workers Paid** plan is recommended: building the ~300-city world snapshot 
 
 See `/methodology` on the site for the full write-up.
 
+## Weather in the sky
+
+The hero sky shows each place's **current weather**: snow (with snow settling on the rooftops), rain with splashes,
+drizzle, thunderstorms with lightning, fog, pollution haze from PM2.5, and heat shimmer. Wind tilts the rain and drifts
+the snow; sweeping the pointer or a finger across the sky pushes them.
+
+- Mapping (WMO weather code, temperature, wind, PM2.5 → sky): `src/lib/scene/weather.ts`
+- Canvas renderer (tunables at the top): `src/scripts/weather-fx.ts`, ~13 KB, downloaded only when the sky has weather
+- Sky tints and rooftop snow: `SkyScene.astro` / `Skyline.astro`
+- Preview any sky on any page: `?wx=snow`, `blizzard`, `rain`, `drizzle`, `storm`, `fog`, `smog`, `heat`, `overcast`,
+  `clear`, or combine them: `/city/delhi?wx=fog,smog`
+
+Performance: 2D canvas only (no WebGL), pre-rendered sprites and noise, pixel ratio capped at 1.5 on touch devices,
+60 fps cap, paused when scrolled away or in a background tab, fewer particles on low-end devices or when frames run
+long. With reduced motion the weather is drawn once, standing still, and there is no lightning.
+
 ## Architecture
 
 ```
