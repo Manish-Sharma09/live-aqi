@@ -10,7 +10,7 @@ interface Props {
 const { id, title, description, boxed = false, class: className } = Astro.props;
 ---
 
-<section id={id} aria-labelledby={`${id}-title`} class:list={['mb-14 scroll-mt-24 lg:mb-16', className]}>
+<section id={id} aria-labelledby={`${id}-title`} data-reveal class:list={['mb-14 scroll-mt-24 lg:mb-16', className]}>
   <div class="mb-4 flex flex-col gap-1 sm:mb-5 lg:flex-row lg:items-end lg:justify-between lg:gap-8">
     <h2 id={`${id}-title`} class="type-section">{title}</h2>
     {description && <p class="max-w-xl text-ink-2 lg:text-right">{description}</p>}

@@ -11,7 +11,7 @@ export const GET: APIRoute = ({ url }) => {
   if (lat === null || lon === null) return error(400, 'Invalid coordinates');
   const place = placeFromCoordinates(lat, lon);
   if (!place) return error(404, 'No nearby place found');
-  const token = place.kind === 'city' ? `s:${place.slug}` : `g:${place.lat.toFixed(2)},${place.lon.toFixed(2)}`;
+  const token = place.kind === 'city' ? `s:${place.slug}` : `g:${place.lat.toFixed(1)},${place.lon.toFixed(1)}`;
   return json({
     token,
     name: place.name,

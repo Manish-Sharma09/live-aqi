@@ -1,0 +1,106 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Icon from '../components/ui/Icon.astro';
+
+export const prerender = false;
+Astro.cache.set({ maxAge: 86400, swr: 604800 });
+
+const EMAIL = 'contact@live-aqi.com';
+const mailto = (subject: string) => `mailto:${EMAIL}?subject=${encodeURIComponent(subject)}`;
+
+const topics = [
+  {
+    icon: 'gauge' as const,
+    title: 'Report a data issue',
+    text: 'A reading looks wrong, a place is missing or a city is in the wrong country? Include the page link, the time you saw it and what you expected.',
+    href: mailto('Data issue'),
+    cta: 'Report an issue',
+  },
+  {
+    icon: 'heart' as const,
+    title: 'Feedback and ideas',
+    text: 'Tell us what would make Live AQI more useful for you, or what got in the way. Every message is read.',
+    href: mailto('Feedback'),
+    cta: 'Send feedback',
+  },
+  {
+    icon: 'globe' as const,
+    title: 'Press and partnerships',
+    text: 'Journalists, researchers, schools and organisations working on clean air are welcome to get in touch.',
+    href: mailto('Partnership'),
+    cta: 'Get in touch',
+  },
+];
+
+const site = Astro.site!.href.replace(/\/$/, '');
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'ContactPage',
+  name: 'Contact Live AQI',
+  url: `${site}/contact`,
+  mainEntity: {
+    '@type': 'Organization',
+    name: 'Live AQI',
+    url: `${site}/`,
+    email: EMAIL,
+    contactPoint: [
+      { '@type': 'ContactPoint', contactType: 'customer support', email: EMAIL, availableLanguage: ['English'] },
+      { '@type': 'ContactPoint', contactType: 'privacy', email: 'privacy@live-aqi.com', availableLanguage: ['English'] },
+    ],
+  },
+};
+---
+
+<BaseLayout
+  title="Contact Live AQI — Feedback, Data Issues & Partnerships"
+  description="Contact Live AQI to report an air quality data issue, share feedback or ideas, or ask about press and partnerships. Email contact@live-aqi.com."
+  canonicalPath="/contact"
+  jsonLd={jsonLd}
+>
+  <section class="stage">
+    <div class="shell pt-10 pb-12 lg:pt-14 lg:pb-16">
+      <h1 class="type-hero max-w-4xl">Get in touch.</h1>
+      <p class="mt-6 max-w-2xl text-lg text-on-stage-muted">
+        Spotted something off in a reading, or have an idea? Email us at{' '}
+        <a class="link font-semibold text-ink" href={`mailto:${EMAIL}`}>{EMAIL}</a>.
+      </p>
+    </div>
+  </section>
+
+  <div class="shell py-12 lg:py-16">
+    <div class="grid gap-4 md:grid-cols-3" data-reveal-stagger>
+      {
+        topics.map((t) => (
+          <div class="card flex flex-col p-6">
+            <span class="grid size-11 place-items-center rounded-full bg-accent-soft text-accent-ink">
+              <Icon name={t.icon} size={20} />
+            </span>
+            <h2 class="type-title mt-5">{t.title}</h2>
+            <p class="mt-3 flex-1 text-ink-2">{t.text}</p>
+            <a href={t.href} class="btn btn-secondary mt-6 self-start">
+              {t.cta} <Icon name="arrow-right" size={16} />
+            </a>
+          </div>
+        ))
+      }
+    </div>
+
+    <div class="prose-reading mt-16">
+      <h2>Before you write</h2>
+      <ul>
+        <li>For how readings are calculated and why they can differ from a nearby monitor, see the <a href="/methodology">methodology</a>.</li>
+        <li>For questions about AQI levels, the <a href="/what-is-aqi">AQI guide</a> and the <a href="/#faq">FAQ</a> may already have the answer.</li>
+        <li>To stop notifications, turn them off on the <a href="/alerts">alerts page</a> or in your browser settings.</li>
+      </ul>
+      <h2>Privacy requests</h2>
+      <p>
+        For questions about your data, email <a href="mailto:privacy@live-aqi.com">privacy@live-aqi.com</a>. The{' '}
+        <a href="/privacy">privacy policy</a> explains what Live AQI stores and how to remove it.
+      </p>
+      <p class="text-sm text-subtle">
+        Live AQI is an information service and can’t give medical advice or respond to emergencies. If you feel unwell
+        because of air pollution, contact a doctor or your local health authority.
+      </p>
+    </div>
+  </div>
+</BaseLayout>

@@ -11,4 +11,4 @@ const { id, class: className } = Astro.props;
 const p = POLLUTANTS[id];
 ---
 
-<span class={className} aria-label={p.ascii}>{p.symbol}{p.sub && <sub aria-hidden="true">{p.sub}</sub>}</span>
+<span class={className}><span aria-hidden="true">{p.symbol}{p.sub && <sub>{p.sub}</sub>}</span><span class="sr-only">{p.ascii}</span></span>

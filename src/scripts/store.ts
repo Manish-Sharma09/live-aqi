@@ -25,11 +25,13 @@ export interface AlertSettings {
   severe: boolean;
   improve: boolean;
   inPage: boolean;
+  /** Play the Live AQI chime when an alert arrives while a page is open. */
+  sound: boolean;
   /** Location to watch. Falls back to the saved "my location" when unset. */
   location?: { token: string; name: string } | undefined;
 }
 
-export const DEFAULT_ALERTS: AlertSettings = { standard: 'auto', threshold: 3, severe: true, improve: true, inPage: true };
+export const DEFAULT_ALERTS: AlertSettings = { standard: 'auto', threshold: 3, severe: true, improve: true, inPage: true, sound: true };
 
 const LOC_KEY = 'laqi:location';
 const ALERT_KEY = 'laqi:alerts';
@@ -150,4 +152,40 @@ export function fetchSummary(token: string, force = false): Promise<Summary | nu
     summaryPromises.set(token, p);
   }
   return p;
+}
+
+// ---------------------------------------------------------------------------
+// AQI standard preference (US AQI / India NAQI)
+// ---------------------------------------------------------------------------
+
+const STD_KEY = 'laqi:std';
+
+/** Pages that take `?std=`. */
+const STD_PAGES = /^\/(?:$|city\/|country\/|world$|rankings$|map$)/;
+
+/** The standard the visitor last chose explicitly, if any. */
+export function getStandardPref(): 'us' | 'in' | null {
+  const v = read<string>(STD_KEY);
+  return v === 'us' || v === 'in' ? v : null;
+}
+
+export function saveStandardPref(std: 'us' | 'in') {
+  write(STD_KEY, std);
+}
+
+/**
+ * Add the preferred standard to an internal link that doesn't already choose one,
+ * so the choice carries over as the visitor moves between pages.
+ */
+export function withStandard(href: string): string {
+  const std = getStandardPref();
+  if (!std) return href;
+  try {
+    const url = new URL(href, window.location.href);
+    if (url.origin !== window.location.origin || !STD_PAGES.test(url.pathname) || url.searchParams.has('std')) return href;
+    url.searchParams.set('std', std);
+    return `${url.pathname}${url.search}${url.hash}`;
+  } catch {
+    return href;
+  }
 }

@@ -1,0 +1,185 @@
+---
+/**
+ * Explainer for the informational searches around AQI ("what is aqi", "aqi full form",
+ * "aqi meaning", "aqi level", "air quality index"); see .docs/seo-keywords.md.
+ * Category ranges and health texts come from the same tables the dashboards use.
+ */
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { healthAdvice } from '../lib/aqi/health';
+import { POLLUTANTS } from '../lib/aqi/pollutants';
+import { STANDARDS, type StandardId } from '../lib/aqi/standards';
+import { POPULAR_CITIES } from '../lib/seo';
+
+export const prerender = false;
+Astro.cache.set({ maxAge: 86400, swr: 604800 });
+
+const levels = (id: StandardId) =>
+  STANDARDS[id].categories.map((c) => {
+    const advice = healthAdvice(id, c, 'pm25');
+    return { c, range: c.max === Infinity ? `${c.min}–500` : `${c.min}–${c.max}`, impact: advice.official.text, todo: advice.headline };
+  });
+const tables = [
+  { id: 'in' as const, caption: 'India National AQI (CPCB) levels', source: 'Health impact: CPCB National AQI' },
+  { id: 'us' as const, caption: 'US AQI (EPA) levels', source: 'Health impact: US EPA / AirNow' },
+];
+
+const title = 'What Is AQI? Full Form, Meaning & AQI Levels Chart | Live AQI';
+const description =
+  'AQI full form is Air Quality Index. Learn what AQI means, the AQI levels from Good to Severe, what each number means for your health and how to check the AQI today.';
+const site = Astro.site!.href.replace(/\/$/, '');
+const jsonLd = [
+  {
+    '@context': 'https://schema.org',
+    '@type': 'Article',
+    headline: 'What is AQI? Full form, meaning and AQI levels',
+    description,
+    url: `${site}/what-is-aqi`,
+    image: `${site}/og.png`,
+    datePublished: '2026-11-18',
+    dateModified: '2026-11-18',
+    author: { '@type': 'Organization', name: 'Live AQI', url: `${site}/` },
+    publisher: { '@type': 'Organization', name: 'Live AQI', logo: { '@type': 'ImageObject', url: `${site}/icons/icon-512.png` } },
+  },
+  {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Live AQI', item: `${site}/` },
+      { '@type': 'ListItem', position: 2, name: 'What is AQI?', item: `${site}/what-is-aqi` },
+    ],
+  },
+];
+---
+
+<BaseLayout title={title} description={description} canonicalPath="/what-is-aqi" jsonLd={jsonLd}>
+  <section class="stage">
+    <div class="shell pt-10 pb-12 lg:pt-14 lg:pb-16">
+      <h1 class="type-hero max-w-4xl">What is AQI?</h1>
+      <p class="mt-6 max-w-2xl text-lg text-on-stage-muted">
+        AQI stands for Air Quality Index: one number, from 0 to 500, that tells you how polluted the air is and what that means
+        for your health.
+      </p>
+      <div class="mt-10 flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+        <ul class="flex flex-wrap gap-2" aria-label="Topics">
+          <li class="chip">AQI full form</li><li class="chip">AQI levels</li><li class="chip">India NAQI</li><li class="chip">US AQI</li>
+        </ul>
+        <p class="byline text-sm text-on-stage-muted"><span>Updated 18 November 2026</span><span>5 min read</span></p>
+      </div>
+    </div>
+  </section>
+
+  <article class="shell py-12 lg:py-16">
+    <div class="prose-reading">
+      <h2>AQI full form and meaning</h2>
+      <p>
+        The full form of AQI is <strong>Air Quality Index</strong>. Air carries several pollutants at once, each measured in its
+        own unit, so the raw numbers are hard to read. The AQI turns each pollutant’s level into a score on the same 0–500 scale
+        and reports the highest one. The meaning is simple: <strong>the higher the AQI, the more polluted the air</strong> and the
+        greater the risk to health. An AQI under 50 is clean air; an AQI above 300 is seriously unhealthy air on either scale.
+      </p>
+      <p>
+        Each band of the scale has a name and a colour, from green (“Good”) to maroon (“Severe” in India, “Hazardous” in the US),
+        so you can judge the air at a glance. The pollutant with the highest score is called the <em>main</em> or{' '}
+        <em>dominant</em> pollutant; in Indian cities it is usually PM2.5 or PM10.
+      </p>
+
+      <h2>AQI levels: what each number means</h2>
+      <p>
+        India uses the National Air Quality Index set by the Central Pollution Control Board (CPCB). Many international
+        apps and websites report the US EPA scale instead. Both run from 0 to 500, but the bands and names differ.
+      </p>
+    </div>
+
+    {
+      tables.map((t) => (
+        <div class="relative mt-6 overflow-x-auto">
+          <table class="data-table min-w-[44rem] text-sm">
+            <caption class="text-left text-caption text-subtle">{t.caption}</caption>
+            <thead>
+              <tr>
+                <th scope="col">AQI</th>
+                <th scope="col">Level</th>
+                <th scope="col">Health impact</th>
+                <th scope="col">What to do</th>
+              </tr>
+            </thead>
+            <tbody>
+              {levels(t.id).map((l) => (
+                <tr>
+                  <td class="font-mono whitespace-nowrap">{l.range}</td>
+                  <td class="whitespace-nowrap">
+                    <span class="inline-flex items-center gap-2">
+                      <span class="swatch" style={`--cat:${l.c.color}`} />
+                      {l.c.label}
+                    </span>
+                  </td>
+                  <td>{l.impact}</td>
+                  <td>{l.todo}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p class="mt-2 text-caption text-subtle">{t.source}</p>
+        </div>
+      ))
+    }
+
+    <div class="prose-reading mt-10">
+      <h2>What is a good AQI level?</h2>
+      <p>
+        An AQI from <strong>0 to 50 is “Good”</strong> on both scales. Up to 100 is still acceptable for most people
+        (“Satisfactory” in India, “Moderate” in the US), though unusually sensitive people may notice it. Above 100, people
+        with asthma, heart or lung disease, children and older adults should cut back on long or hard exercise outdoors. Above
+        200 in India (“Poor”) or 150 in the US (“Unhealthy”), everyone should.
+      </p>
+
+      <h2>Why the same air can show two different AQI numbers</h2>
+      <p>
+        The India and US indices use different pollutant bands and averaging times. India averages particles over 24 hours,
+        while the US real-time AQI uses a shorter weighted average that reacts faster to change. For the same PM2.5 level, the
+        US number tends to be higher in cleaner air and the Indian number higher in heavily polluted air. Live AQI shows the
+        India NAQI by default for places in India and lets you switch to the US AQI on every page. The two are never mixed.
+      </p>
+
+      <h2>How is AQI calculated?</h2>
+      <p>
+        Pollutant concentrations are averaged over the period each standard sets, then each one is placed in its band and
+        converted to a sub-index by straight-line interpolation. The overall AQI is the highest sub-index. India’s official
+        index can include ammonia and lead as well; Live AQI uses the six pollutants below, which cover the main sources of
+        pollution everywhere. The <a href="/methodology">methodology</a> lists every breakpoint and rule.
+      </p>
+
+      <h2>Pollutants that make up the AQI</h2>
+      <ul>
+        {
+          Object.values(POLLUTANTS).map((p) => (
+            <li>
+              <strong>{p.ascii}</strong> ({p.name.toLowerCase()}): {p.about}
+            </li>
+          ))
+        }
+      </ul>
+
+      <h2>How to check the AQI today near you</h2>
+      <p>
+        The <a href="/">Live AQI home page</a> shows the live AQI for your location as soon as it opens, with PM2.5, PM10,
+        the 48-hour forecast and health advice. Search any city from the top of the page, see the <a href="/map">AQI map</a>{' '}
+        or the <a href="/rankings">AQI ranking</a> of the most polluted cities, and <a href="/alerts">set an alert</a> to hear
+        when the air near you turns unhealthy.
+      </p>
+      <p>Live AQI today in the most searched cities:</p>
+    </div>
+
+    <ul class="mt-4 flex max-w-[44rem] flex-wrap gap-2" aria-label="Popular cities">
+      {
+        POPULAR_CITIES.slice(0, 15).map((c) => (
+          <li>
+            <a href={`/city/${c.slug}`} class="chip hover:underline">
+              {c.label} AQI
+            </a>
+          </li>
+        ))
+      }
+    </ul>
+  </article>
+</BaseLayout>

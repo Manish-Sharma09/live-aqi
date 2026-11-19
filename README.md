@@ -31,9 +31,15 @@ Secrets never reach the browser.
 | `VAPID_SUBJECT` | var | — | Contact for push services (`mailto:` or URL). Default `mailto:alerts@live-aqi.com`. |
 | `OPEN_METEO_API_KEY` | secret | **for commercial use** | Switches to Open-Meteo’s `customer-*` endpoints. The free tier is non-commercial and limited to 10,000 calls/day. |
 | `WAQI_TOKEN` | secret | optional | Enables ground-station data (map layer, “nearby stations”, station search). Get one at aqicn.org/data-platform/token. |
+| `GA_MEASUREMENT_ID` | var | optional | Google Analytics 4 ID (`G-…`), set in `wrangler.jsonc` → `vars`. Empty = no analytics script; the privacy policy adds its analytics section automatically when set. |
 
 Bindings (in `wrangler.jsonc`): `LIVE_AQI_KV` (KV: snapshot cache + push subscriptions; auto-provisioned on first
-deploy) and a cron trigger every 30 minutes for the alert sweep.
+deploy), `API_RATE_LIMITER` (120 `/api/*` requests per minute per IP, protecting the upstream API quotas; requests
+pass through if the binding is missing) and a cron trigger every 30 minutes that pre-builds the world snapshot when
+it is due (so visitors never wait for it) and runs the alert sweep.
+
+All VAPID values are read at runtime, so the keys set with `wrangler secret put` are the ones used, never the local
+`.dev.vars` pair.
 
 ## Deploy (Cloudflare Workers)
 
@@ -49,6 +55,15 @@ npm run deploy
 
 Then attach the `live-aqi.com` custom domain to the Worker. Edge page caching (`Astro.cache.set`) and the
 per-data-centre Cache API only take effect on a custom domain, not on `*.workers.dev`.
+
+After the custom domain works:
+
+- **Turn off `*.workers.dev` and preview URLs** (Workers → live-aqi → Settings → Domains & Routes), and add
+  `"workers_dev": false` and `"preview_urls": false` to `wrangler.jsonc` so the next deploy doesn't switch them back on.
+  Until then, every response on a `*.workers.dev` host carries `X-Robots-Tag: noindex, nofollow` (`src/worker.ts`).
+- **Email Routing** (Cloudflare → live-aqi.com → Email → Email Routing): forward `contact@`, `privacy@` and `alerts@`
+  (or a catch-all) to your inbox. These addresses appear on `/contact`, `/privacy`, `/terms` and in `VAPID_SUBJECT`.
+- **Search consoles:** submit `https://live-aqi.com/sitemap-index.xml` in Google Search Console and Bing Webmaster Tools.
 
 The **Workers Paid** plan is recommended: building the ~300-city world snapshot takes more CPU than the free plan’s
 10 ms limit, and KV writes on the free plan are capped at 1,000/day.

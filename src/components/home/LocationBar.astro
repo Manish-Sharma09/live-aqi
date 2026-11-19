@@ -24,11 +24,11 @@ const askFirst = source === 'network' || source === 'default';
       <span class="truncate"><span class="font-semibold text-ink">{name}</span>, <span data-note>{note[source]}</span></span>
     </p>
     <p class="flex flex-wrap items-center gap-2">
-      <button type="button" data-locate class="inline-flex h-9 items-center gap-1.5 rounded-full border border-line bg-surface px-3.5 font-semibold text-ink hover:border-line-strong disabled:opacity-50">
+      <button type="button" data-locate data-press class="inline-flex h-9 items-center gap-1.5 rounded-full border border-line bg-surface px-3.5 font-semibold text-ink hover:border-line-strong disabled:opacity-50">
         <Icon name="locate" size={15} />
         <span data-locate-label>{source === 'precise' ? 'Refresh my location' : 'Use my location'}</span>
       </button>
-      <button type="button" data-change class="inline-flex h-9 items-center gap-1.5 rounded-full border border-line bg-surface px-3.5 font-semibold text-ink hover:border-line-strong" aria-expanded="false" aria-controls="change-location">
+      <button type="button" data-change data-press class="inline-flex h-9 items-center gap-1.5 rounded-full border border-line bg-surface px-3.5 font-semibold text-ink hover:border-line-strong" aria-expanded="false" aria-controls="change-location">
         <Icon name="search" size={15} />
         Change location
       </button>
@@ -46,7 +46,7 @@ const askFirst = source === 'network' || source === 'default';
     )
   }
 
-  <p data-geo-status role="status" aria-live="polite" class="mt-2 text-sm font-semibold text-ink" hidden></p>
+  <div role="status" aria-live="polite"><p data-geo-status class="mt-2 text-sm font-semibold text-ink" hidden></p></div>
 
   <div id="change-location" data-change-panel hidden class="mt-4 max-w-xl">
     <LocationSearch
@@ -134,7 +134,8 @@ const askFirst = source === 'network' || source === 'default';
         async (pos) => {
           try {
             const { latitude, longitude } = pos.coords;
-            const res = await fetch(`/api/locate?lat=${latitude.toFixed(3)}&lon=${longitude.toFixed(3)}`);
+            // Rounded to ~1 km before leaving the device, as the prompt and privacy page promise.
+            const res = await fetch(`/api/locate?lat=${latitude.toFixed(2)}&lon=${longitude.toFixed(2)}`);
             if (!res.ok) throw new Error(String(res.status));
             const loc = (await res.json()) as { token: string; name: string; subtitle: string; href: string };
             const current = getSavedLocation();

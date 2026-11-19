@@ -1,9 +1,19 @@
 import type { APIRoute } from 'astro';
 import { error, isSameOrigin, json } from '../../../lib/api';
-import { baselineState } from '../../../lib/aqi/alert-copy';
+import { baselineState, composeAlert } from '../../../lib/aqi/alert-copy';
 import { defaultStandardFor } from '../../../lib/aqi/standards';
 import { push } from '../../../lib/config';
-import { getSubscription, kvStore, putSubscription, subscriptionId, type AlertPrefs, type StoredSubscription } from '../../../lib/push/subscriptions';
+import { deliver } from '../../../lib/push/sweep';
+import {
+  getSubscription,
+  kvStore,
+  putPendingMessage,
+  putSubscription,
+  subscriptionId,
+  type AlertPrefs,
+  type PendingMessage,
+  type StoredSubscription,
+} from '../../../lib/push/subscriptions';
 import { isValidPushEndpoint } from '../../../lib/push/vapid';
 import { getLocationReport, resolveLocationToken } from '../../../lib/services/reports';
 
@@ -46,17 +56,24 @@ export const POST: APIRoute = async ({ request }) => {
     existing.prefs.standard === prefs.standard &&
     existing.prefs.threshold === prefs.threshold &&
     existing.prefs.severe === prefs.severe;
+  // Re-sync from the alerts page with nothing new: skip the (metered) KV write.
+  if (sameTarget && existing.prefs.improve === prefs.improve && existing.location.name === place.name) {
+    return json({ ok: true, location: existing.location, prefs });
+  }
 
   // Baseline from the current reading so subscribers are never alerted about conditions that already exist.
+  const std = prefs.standard === 'auto' ? defaultStandardFor(place.cc) : prefs.standard;
   let state = sameTarget ? existing.state : null;
-  if (!state) {
+  let confirmation: Omit<PendingMessage, 'url' | 'createdAt'> | null = null;
+  if (!state || !existing) {
     try {
-      const report = await getLocationReport(place);
-      const std = prefs.standard === 'auto' ? defaultStandardFor(place.cc) : prefs.standard;
-      const r = report.current.aqi[std];
-      if (r) state = baselineState(r.category.level, prefs.threshold, prefs);
+      const r = (await getLocationReport(place)).current.aqi[std];
+      if (r) {
+        state ??= baselineState(r.category.level, prefs.threshold, prefs);
+        confirmation = composeAlert('test', place.name, std, r.aqi, r.category.level, r.dominant);
+      }
     } catch {
-      state = null;
+      /* no reading right now: no baseline, generic confirmation text */
     }
   }
 
@@ -67,11 +84,30 @@ export const POST: APIRoute = async ({ request }) => {
     location: { token, name: place.name },
     prefs,
     state,
-    pending: existing?.pending ?? null,
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
     ...(existing?.lastTestAt ? { lastTestAt: existing.lastTestAt } : {}),
   };
+
+  // A new endpoint must prove it is real before it is stored: send the confirmation
+  // notification and keep the subscription only if the push service accepts it. This
+  // keeps made-up endpoints out of storage and out of every later sweep.
+  let confirmationSent = false;
+  if (!existing) {
+    const message = confirmation ?? {
+      kind: 'test' as const,
+      level: 0,
+      title: `Live AQI alerts are on for ${place.name}`,
+      body: 'You’ll be notified when the air crosses your alert level.',
+    };
+    await putPendingMessage(sub.id, { ...message, url: `/city/${place.slug}`, createdAt: now });
+    const outcome = await deliver(sub, 'normal');
+    if (outcome === 'gone') return error(400, 'This browser subscription is no longer valid — please try again');
+    if (outcome === 'failed') return error(502, 'The push service did not accept this browser — please try again');
+    confirmationSent = true;
+    sub.lastTestAt = now; // the confirmation counts as a test (avoids a second one straight away)
+  }
+
   await putSubscription(sub);
-  return json({ ok: true, location: sub.location, prefs });
+  return json({ ok: true, location: sub.location, prefs, confirmationSent });
 };

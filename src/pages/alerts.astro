@@ -63,7 +63,7 @@ const pushReady = push.enabled && Boolean(kvStore());
               ['in', 'India NAQI', 'CPCB categories'],
             ].map(([value, label, hint]) => (
               <label class="flex cursor-pointer gap-3 rounded-ui border border-line p-3 has-checked:border-accent has-checked:bg-accent-soft">
-                <input type="radio" name="standard" value={value} class="mt-1 accent-black" />
+                <input type="radio" name="standard" value={value} class="mt-1 accent-(--accent)" />
                 <span>
                   <span class="block font-semibold">{label}</span>
                   <span class="block text-sm text-subtle">{hint}</span>
@@ -80,7 +80,7 @@ const pushReady = push.enabled && Boolean(kvStore());
           {
             [1, 2, 3, 4, 5].map((lvl) => (
               <label class="flex cursor-pointer items-center gap-3 py-3">
-                <input type="radio" name="threshold" value={lvl} class="accent-black" />
+                <input type="radio" name="threshold" value={lvl} class="accent-(--accent)" />
                 <span class="flex-1">
                   <span data-threshold-label={lvl} class="font-semibold">{LEVEL_LABELS.us[lvl]}</span>
                   <span class="text-subtle"> or worse</span>
@@ -90,7 +90,7 @@ const pushReady = push.enabled && Boolean(kvStore());
             ))
           }
           <label class="flex cursor-pointer items-center gap-3 py-3">
-            <input type="radio" name="threshold" value="6" class="accent-black" />
+            <input type="radio" name="threshold" value="6" class="accent-(--accent)" />
             <span class="flex-1">
               <span class="font-semibold">Only severe pollution</span>
               <span class="block text-sm text-subtle">No threshold alerts — just the worst category (needs severe alerts on).</span>
@@ -106,9 +106,10 @@ const pushReady = push.enabled && Boolean(kvStore());
             ['severe', 'Severe pollution alerts', 'Always alert, as high priority, when the air reaches the worst category (Hazardous / Severe).'],
             ['improve', 'Improvement alerts', 'Tell me when the air recovers below my alert level for at least two hourly readings.'],
             ['inPage', 'In-page alerts', 'Show an on-screen alert while a Live AQI page is open and the reading changes.'],
+            ['sound', 'Alert sound', 'Play the Live AQI chime — a soft breath, then a bell — when an alert arrives while Live AQI is open. Background notifications use your device’s own sound.'],
           ].map(([name, label, hint]) => (
             <label class="flex cursor-pointer gap-3 rounded-ui border border-line bg-surface p-4 has-checked:border-accent">
-              <input type="checkbox" name={name} class="mt-1 size-4 accent-black" />
+              <input type="checkbox" name={name} class="mt-1 size-4 accent-(--accent)" />
               <span>
                 <span class="block font-semibold">{label}</span>
                 <span class="block text-sm text-subtle">{hint}</span>
@@ -120,6 +121,9 @@ const pushReady = push.enabled && Boolean(kvStore());
 
       <div class="flex flex-wrap items-center gap-3">
         <button type="submit" class="btn btn-ink">Save alert settings</button>
+        <button type="button" data-alert-preview class="btn btn-outline">
+          <Icon name="bell" size={17} /> Preview alert
+        </button>
         <p data-form-status role="status" aria-live="polite" class="text-sm text-subtle"></p>
       </div>
     </form>
@@ -156,6 +160,10 @@ const pushReady = push.enabled && Boolean(kvStore());
           <li class="flex gap-3">
             <Icon name="bell" class="mt-0.5 text-ink" />
             <span><strong class="text-ink">Background notifications</strong> are delivered by your browser’s push service, even when no Live AQI page is open.</span>
+          </li>
+          <li class="flex gap-3">
+            <Icon name="mask" class="mt-0.5 text-ink" />
+            <span><strong class="text-ink">Clear advice in every alert:</strong> what to do first — wear a mask, keep windows closed, stay in, or breathe easy — then a short checklist.</span>
           </li>
           <li class="flex gap-3">
             <Icon name="info" class="mt-0.5 text-ink" />
@@ -209,7 +217,7 @@ const pushReady = push.enabled && Boolean(kvStore());
   function fillForm() {
     (form.elements.namedItem('standard') as RadioNodeList).value = settings.standard;
     (form.elements.namedItem('threshold') as RadioNodeList).value = String(settings.threshold);
-    for (const k of ['severe', 'improve', 'inPage'] as const) (form.elements.namedItem(k) as HTMLInputElement).checked = settings[k];
+    for (const k of ['severe', 'improve', 'inPage', 'sound'] as const) (form.elements.namedItem(k) as HTMLInputElement).checked = settings[k];
     renderLocation();
     renderThresholdLabels();
   }
@@ -220,6 +228,7 @@ const pushReady = push.enabled && Boolean(kvStore());
       severe: (form.elements.namedItem('severe') as HTMLInputElement).checked,
       improve: (form.elements.namedItem('improve') as HTMLInputElement).checked,
       inPage: (form.elements.namedItem('inPage') as HTMLInputElement).checked,
+      sound: (form.elements.namedItem('sound') as HTMLInputElement).checked,
       location: location_ ?? undefined,
     };
   }
@@ -237,15 +246,19 @@ const pushReady = push.enabled && Boolean(kvStore());
     formStatus.textContent = `${r.title} selected — save to apply.`;
   });
 
+  /** Why the form can't be saved as it stands, or null when it can. */
+  function formProblem(next: AlertSettings): string | null {
+    if (next.threshold === 6 && !next.severe) return '“Only severe pollution” needs severe alerts turned on.';
+    if (!next.location) return 'Choose a location to watch first.';
+    return null;
+  }
+
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const next = readForm();
-    if (next.threshold === 6 && !next.severe) {
-      formStatus.textContent = '“Only severe pollution” needs severe alerts turned on.';
-      return;
-    }
-    if (!next.location) {
-      formStatus.textContent = 'Choose a location to watch first.';
+    const problem = formProblem(next);
+    if (problem) {
+      formStatus.textContent = problem;
       return;
     }
     settings = next;
@@ -276,7 +289,8 @@ const pushReady = push.enabled && Boolean(kvStore());
     return reg ? reg.pushManager.getSubscription() : null;
   }
 
-  async function syncSubscription(sub: PushSubscription): Promise<boolean> {
+  /** Register this browser's subscription; false on failure, else whether a confirmation push was sent. */
+  async function syncSubscription(sub: PushSubscription): Promise<false | { confirmationSent: boolean }> {
     if (!settings.location) return false;
     const res = await fetch('/api/alerts/subscribe', {
       method: 'POST',
@@ -287,7 +301,9 @@ const pushReady = push.enabled && Boolean(kvStore());
         prefs: { standard: settings.standard, threshold: settings.threshold, severe: settings.severe, improve: settings.improve },
       }),
     }).catch(() => null);
-    return Boolean(res?.ok);
+    if (!res?.ok) return false;
+    const body = (await res.json().catch(() => ({}))) as { confirmationSent?: boolean };
+    return { confirmationSent: Boolean(body.confirmationSent) };
   }
 
   function show(state: { text: string; enable?: boolean; disable?: boolean; test?: boolean }) {
@@ -313,14 +329,17 @@ const pushReady = push.enabled && Boolean(kvStore());
   }
 
   btnEnable.addEventListener('click', async () => {
-    if (!location_) {
-      pushStatus.textContent = 'Choose a location to watch first, then save your settings.';
+    // Subscribe with what the form shows now (e.g. a city passed in from its page),
+    // not whatever was saved earlier.
+    const next = readForm();
+    const problem = formProblem(next);
+    if (problem) {
+      pushStatus.textContent = problem;
       return;
     }
-    if (!settings.location) {
-      settings = readForm();
-      saveAlertSettings(settings);
-    }
+    settings = next;
+    saveAlertSettings(settings);
+    renderLocation();
     btnEnable.disabled = true;
     pushStatus.textContent = 'Waiting for your permission…';
     try {
@@ -340,6 +359,7 @@ const pushReady = push.enabled && Boolean(kvStore());
         return;
       }
       await refreshPushState();
+      if (ok.confirmationSent) pushStatus.textContent += ' A confirmation notification is on its way.';
     } catch (err) {
       console.error(err);
       pushStatus.textContent = 'Turning on notifications failed. Check that notifications are allowed and try again.';
@@ -367,6 +387,28 @@ const pushReady = push.enabled && Boolean(kvStore());
     setTimeout(() => (btnTest.disabled = false), 5000);
   });
 
+  // Sound toggled from an alert's own button: keep this form in step, so saving it doesn't undo that.
+  window.addEventListener('laqi:alerts-change', (e) => {
+    const sound = (e as CustomEvent<AlertSettings>).detail.sound;
+    settings = { ...settings, sound };
+    (form.elements.namedItem('sound') as HTMLInputElement).checked = sound;
+  });
+
+  // Preview: the in-page alert (NotificationManager) for the level and place on the form, with its chime.
+  root.querySelector('[data-alert-preview]')!.addEventListener('click', () => {
+    const next = readForm();
+    window.dispatchEvent(
+      new CustomEvent('laqi:alert-preview', {
+        detail: { level: next.threshold === 6 ? 5 : next.threshold, standard: next.standard, token: location_?.token, name: location_?.name },
+      }),
+    );
+  });
+
   fillForm();
   refreshPushState();
+  // Backstop for rotated subscriptions: make sure the server knows this browser's
+  // current endpoint (the server skips the write when nothing changed).
+  currentSubscription()
+    .then((sub) => (sub ? syncSubscription(sub) : false))
+    .catch(() => false);
 </script>

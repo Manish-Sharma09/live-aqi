@@ -86,7 +86,10 @@ export async function searchStations(keyword: string, limit = 4): Promise<Statio
   const res = await cached(key, TTL.stations, async () => {
     const url = `${waqi.baseUrl}/search/?keyword=${encodeURIComponent(keyword.trim())}&token=${encodeURIComponent(waqi.token!)}`;
     const body = await fetchJson<SearchResponse>(url, { timeoutMs: 6000 });
-    if (body.status !== 'ok' || !Array.isArray(body.data)) return [];
+    // An error status (bad token, over quota) must not be cached as "no stations".
+    if (body.status !== 'ok' || !Array.isArray(body.data)) {
+      throw new UpstreamError('http', typeof body.data === 'string' ? body.data : 'WAQI error');
+    }
     return body.data.map<Station>((d) => ({
       uid: d.uid,
       name: d.station.name,

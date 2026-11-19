@@ -1,0 +1,116 @@
+---
+/**
+ * Plain-language answers to what people search about a city ("<city> aqi today",
+ * "highest aqi in <city>", "what is aqi"), built only from the live reading and
+ * trend already on the page, so nothing here is estimated or filled in.
+ */
+import { categoryFor, STANDARDS, type StandardId } from '../../lib/aqi/standards';
+import { POLLUTANTS } from '../../lib/aqi/pollutants';
+import { healthAdvice } from '../../lib/aqi/health';
+import { formatConcentration, formatDateTime, formatHour } from '../../lib/format';
+import { nameWithSearchName } from '../../lib/seo';
+import type { LocationReport } from '../../lib/services/reports';
+
+interface Props {
+  report: LocationReport;
+  standard: StandardId;
+}
+
+const { report, standard } = Astro.props;
+const { place, current, trend } = report;
+const tz = place.timezone;
+const def = STANDARDS[standard];
+const other: StandardId = standard === 'in' ? 'us' : 'in';
+const now = current.aqi[standard];
+const alt = current.aqi[other];
+const shown = (r: { aqi: number; beyondScale: boolean }) => (r.beyondScale ? '500+' : String(r.aqi));
+const pm25 = current.concentrations.pm25;
+const outdoor = now ? healthAdvice(standard, now.category, now.dominant) : null;
+
+// Highest hourly value in the observed part of the trend (no forecast hours).
+const past = trend[standard].slice(0, trend.nowIndex + 1);
+let peakAt = -1;
+past.forEach((v, i) => {
+  if (v !== null && (peakAt < 0 || v > past[peakAt]!)) peakAt = i;
+});
+const peak = peakAt >= 0 ? past[peakAt]! : null;
+const span = past.length >= 48 ? `the past ${Math.round(past.length / 24)} days` : `the past ${past.length} hours`;
+
+// Forecast range over the next 24 hours.
+const ahead = trend[standard].slice(trend.nowIndex + 1, trend.nowIndex + 25).filter((v): v is number => v !== null);
+const lo = ahead.length ? Math.min(...ahead) : null;
+const hi = ahead.length ? Math.max(...ahead) : null;
+const loCat = lo !== null ? categoryFor(standard, lo) : null;
+const hiCat = hi !== null ? categoryFor(standard, hi) : null;
+
+// Sentences are built here so JSX line breaks never put stray spaces before punctuation.
+const nowRest = now
+  ? ` on the ${def.name}, which is “${now.category.label}”. The main pollutant is ${POLLUTANTS[now.dominant].ascii}` +
+    (pm25 === undefined
+      ? '.'
+      : now.dominant === 'pm25'
+        ? `, at ${formatConcentration(pm25)} µg/m³ this hour.`
+        : `; PM2.5 is ${formatConcentration(pm25)} µg/m³ this hour.`) +
+    (alt ? ` On the ${STANDARDS[other].shortName} scale the same air scores ${shown(alt)} (${alt.category.label}).` : '') +
+    ' The reading updates every hour.'
+  : '';
+const peakRest =
+  peak !== null
+    ? ` (${categoryFor(standard, peak).label}), on ${formatDateTime(trend.times[peakAt]!, tz)} local time` +
+      (peakAt === trend.nowIndex ? ', which is the current reading.' : '.')
+    : '';
+---
+
+{
+  now && outdoor && (
+    <div class="divide-y divide-line">
+      <div class="pb-6">
+        <h3 class="font-bold">What is the AQI in {nameWithSearchName(place.name, place.slug)} today?</h3>
+        <p class="mt-2 max-w-prose text-ink-2">
+          At {formatHour(current.time, tz)} local time, the air quality index in {place.name} is <strong class="text-ink">{shown(now)}</strong>{nowRest}
+        </p>
+      </div>
+
+      <div class="py-6">
+        <h3 class="font-bold">Is it safe to go outside in {place.name} today?</h3>
+        <p class="mt-2 max-w-prose text-ink-2">
+          {outdoor.headline} {outdoor.actions[0]!.detail} <a class="link" href="#health">See the full health advice</a>.
+        </p>
+      </div>
+
+      {
+        peak !== null && (
+          <div class="py-6">
+            <h3 class="font-bold">What was the highest AQI in {place.name} recently?</h3>
+            <p class="mt-2 max-w-prose text-ink-2">
+              The highest hourly {def.shortName} in {span} was <strong class="text-ink">{peak}</strong>{peakRest}
+            </p>
+          </div>
+        )
+      }
+
+      {
+        lo !== null && hi !== null && loCat && hiCat && (
+          <div class="py-6">
+            <h3 class="font-bold">What is the AQI forecast for {place.name}?</h3>
+            <p class="mt-2 max-w-prose text-ink-2">
+              {loCat.level === hiCat.level
+                ? `Over the next 24 hours the ${def.shortName} is forecast to stay “${loCat.label}”, between ${lo} and ${hi}.`
+                : `Over the next 24 hours the ${def.shortName} is forecast to range from ${lo} (${loCat.label}) to ${hi} (${hiCat.label}).`}{' '}
+              The forecast comes from the CAMS atmospheric model and is updated as new model runs arrive.
+            </p>
+          </div>
+        )
+      }
+
+      <div class="pt-6">
+        <h3 class="font-bold">What does AQI mean?</h3>
+        <p class="mt-2 max-w-prose text-ink-2">
+          AQI is short for Air Quality Index. It turns the levels of the main air pollutants (PM2.5, PM10, ozone, nitrogen
+          dioxide, sulphur dioxide and carbon monoxide) into a single number from 0 to 500: the higher it is, the more polluted
+          the air and the greater the health risk. <a class="link" href="/what-is-aqi">AQI levels and meaning explained</a>.
+        </p>
+      </div>
+    </div>
+  )
+}

@@ -56,8 +56,7 @@ const {
     data-status
     role="status"
     aria-live="polite"
-    hidden
-    class="mt-2 text-sm text-ink-2"
+    class="sr-only mt-2 text-sm text-ink-2"
   >
   </p>
   <ul
@@ -65,7 +64,7 @@ const {
     aria-label="Search results"
     hidden
     class:list={[
-      'absolute inset-x-0 top-[calc(100%+0.375rem)] z-50 max-h-[min(26rem,60vh)] overflow-y-auto rounded-card border border-line bg-surface py-1.5 text-ink shadow-pop',
+      'glass glass-strong absolute inset-x-0 top-[calc(100%+0.375rem)] z-50 max-h-[min(26rem,60vh)] overflow-y-auto rounded-card py-1.5 text-ink',
     ]}
   >
   </ul>

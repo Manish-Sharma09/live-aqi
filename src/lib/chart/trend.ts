@@ -43,6 +43,16 @@ const BOUNDARIES: Record<StandardId, number[]> = {
   in: [50, 100, 200, 300, 400, 500],
 };
 
+/**
+ * Y-axis top for an AQI chart: the first category boundary above the peak plus 15%
+ * headroom. Peaks near the top of the scale stop at 500 (the index is capped there)
+ * instead of jumping to 1000 and squashing the line into the lower half.
+ */
+export function aqiAxisMax(standard: StandardId, peak: number): number {
+  const target = peak * 1.15;
+  return Math.max(100, BOUNDARIES[standard].find((x) => x >= target) ?? (peak <= 500 ? 500 : niceCeil(target)));
+}
+
 export const RANGE_LABEL: Record<TrendRange, string> = {
   '24h': 'last 24 hours',
   '7d': 'last 7 days',
@@ -120,9 +130,7 @@ export function buildSoftTrendSpec(
   let yMax: number;
   if (metric === 'aqi') {
     const present = aqi.filter((v): v is number => v !== null);
-    const maxV = present.length ? Math.max(...present) : 0;
-    const b = BOUNDARIES[p.standard];
-    yMax = Math.max(100, b.find((x) => x >= maxV * 1.15) ?? niceCeil(maxV * 1.15));
+    yMax = aqiAxisMax(p.standard, present.length ? Math.max(...present) : 0);
   } else {
     const all = [...pm25, ...pm10].filter((v): v is number => v !== null);
     yMax = niceCeil(Math.max(all.length ? Math.max(...all) : 0, WHO_24H.pm10) * 1.15);

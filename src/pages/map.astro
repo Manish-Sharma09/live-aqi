@@ -11,16 +11,16 @@ const cats = STANDARDS.us.categories;
 ---
 
 <BaseLayout
-  title="Global Air Quality Map — Live AQI Worldwide | Live AQI"
-  description="Interactive world air-quality map: live AQI for 300+ major cities, colour-coded by category, with PM2.5, 24-hour change and links to every city dashboard."
+  title="AQI Map — Live Air Quality Map of India & the World | Live AQI"
+  description="Live AQI map: real-time air quality index for 300+ major cities in India and worldwide, colour-coded by pollution level, with PM2.5, 24-hour change and city pages."
   canonicalPath="/map"
   bare
 >
-  <div class="flex flex-col-reverse lg:h-[calc(100dvh-4rem)] lg:flex-row">
+  <div class="flex flex-col-reverse lg:h-[calc(100dvh-var(--header-h)-1px)] lg:flex-row">
     <aside data-map-panel class="stage w-full shrink-0 border-stage-line lg:w-[25rem] lg:overflow-y-auto lg:border-r">
       <div class="space-y-7 p-5 lg:p-6">
         <div>
-          <h1 class="type-title">Global air quality map</h1>
+          <h1 class="type-title">Live AQI map</h1>
           <p data-map-meta class="mt-2 text-caption text-on-stage-faint">Loading live readings…</p>
         </div>
 
@@ -57,6 +57,8 @@ const cats = STANDARDS.us.categories;
                     type="button"
                     data-level={c.level}
                     aria-pressed="true"
+                    data-press
+                    style="--press: 0.98"
                     class="flex w-full items-center gap-3 rounded-ui px-2 py-1.5 text-left text-sm transition-colors hover:bg-surface-2 aria-[pressed=false]:opacity-45"
                   >
                     <span data-level-swatch class="swatch size-3" style={`--cat:${c.color}`} />
@@ -69,9 +71,9 @@ const cats = STANDARDS.us.categories;
             }
           </ul>
           <p class="mt-2 text-caption text-on-stage-faint">Select a category to hide or show it. Counts are cities currently in that category.</p>
+          <!-- Live region stays in the tree (inside this block, so it adds no gap when empty). -->
+          <div role="status" aria-live="polite"><p data-map-status class="mt-7 rounded-ui border border-stage-line p-3 text-sm text-on-stage-muted" hidden></p></div>
         </div>
-
-        <p data-map-status role="status" aria-live="polite" class="rounded-ui border border-stage-line p-3 text-sm text-on-stage-muted" hidden></p>
 
         <div>
           <h2 class="font-bold">Most polluted in view</h2>
@@ -110,8 +112,26 @@ const cats = STANDARDS.us.categories;
     border-radius: 4px;
     padding: 12px 34px 12px 14px;
     font-family: var(--font-sans);
-    color: #000;
+    /* Theme tokens, so the popup's token-coloured text stays readable at night. */
+    background: var(--surface);
+    color: var(--ink);
     box-shadow: var(--shadow-pop);
+  }
+  .laqi-popup.maplibregl-popup-anchor-top .maplibregl-popup-tip,
+  .laqi-popup.maplibregl-popup-anchor-top-left .maplibregl-popup-tip,
+  .laqi-popup.maplibregl-popup-anchor-top-right .maplibregl-popup-tip {
+    border-bottom-color: var(--surface);
+  }
+  .laqi-popup.maplibregl-popup-anchor-bottom .maplibregl-popup-tip,
+  .laqi-popup.maplibregl-popup-anchor-bottom-left .maplibregl-popup-tip,
+  .laqi-popup.maplibregl-popup-anchor-bottom-right .maplibregl-popup-tip {
+    border-top-color: var(--surface);
+  }
+  .laqi-popup.maplibregl-popup-anchor-left .maplibregl-popup-tip {
+    border-right-color: var(--surface);
+  }
+  .laqi-popup.maplibregl-popup-anchor-right .maplibregl-popup-tip {
+    border-left-color: var(--surface);
   }
   .laqi-popup .maplibregl-popup-close-button {
     font-size: 18px;

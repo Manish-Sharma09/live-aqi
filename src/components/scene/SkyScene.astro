@@ -4,6 +4,8 @@
  * [data-theme], with the city skyline along the bottom. Kuala Lumpur uses the
  * commissioned artwork; every other place gets the generated skyline.
  * The default slot is layered on top (the glass AQI card).
+ * Motion (liquid.css / motion.ts): clouds drift, the sun or moon glows softly, a few
+ * stars twinkle, and layers shift slightly with the pointer ([data-depth]).
  */
 import Skyline from './Skyline.astro';
 
@@ -21,18 +23,11 @@ const stars = Array.from({ length: 46 }, () => ({ x: rnd() * 100, y: rnd() * 58,
 ---
 
 <div
-  class:list={['scene relative isolate overflow-hidden rounded-scene', className]}
+  class:list={['scene hero-scene vt-sky relative isolate overflow-hidden rounded-scene', className]}
   style="background: linear-gradient(180deg, var(--sky-top) 0%, var(--sky-mid) 52%, var(--sky-bottom) 100%)"
 >
-  <svg class="pointer-events-none absolute inset-0 -z-10 h-full w-full" aria-hidden="true" focusable="false">
+  <svg class="sky-stars pointer-events-none absolute inset-0 -z-10 h-full w-full" data-depth style="--depth:2" aria-hidden="true" focusable="false">
     {stars.map((s) => <circle cx={`${s.x.toFixed(2)}%`} cy={`${s.y.toFixed(2)}%`} r={s.r.toFixed(2)} fill="var(--star)" opacity={s.o.toFixed(2)} />)}
-  </svg>
-
-  <svg class="pointer-events-none absolute top-[7%] left-[5%] -z-10 w-[34%] max-w-[230px] dark:hidden" viewBox="0 0 220 80" aria-hidden="true">
-    <path d="M30 70h150a26 26 0 0 0 3-51.8A36 36 0 0 0 115 10a32 32 0 0 0-58 12A24 24 0 0 0 30 70Z" fill="var(--cloud)" />
-  </svg>
-  <svg class="pointer-events-none absolute top-[22%] right-[30%] -z-10 hidden w-[20%] max-w-[140px] dark:hidden sm:block" viewBox="0 0 220 80" aria-hidden="true">
-    <path d="M30 70h150a26 26 0 0 0 3-51.8A36 36 0 0 0 115 10a32 32 0 0 0-58 12A24 24 0 0 0 30 70Z" fill="var(--cloud)" opacity="0.8" />
   </svg>
 
   <img
@@ -40,7 +35,9 @@ const stars = Array.from({ length: 46 }, () => ({ x: rnd() * 100, y: rnd() * 58,
     alt=""
     width="300"
     height="304"
-    class="pointer-events-none absolute top-[3%] right-[6%] -z-10 w-[30%] max-w-[170px] dark:hidden"
+    class="sky-glow pointer-events-none absolute top-[3%] right-[6%] -z-10 w-[30%] max-w-[170px] dark:hidden"
+    data-depth
+    style="--depth:7"
     decoding="async"
   />
   <img
@@ -48,12 +45,28 @@ const stars = Array.from({ length: 46 }, () => ({ x: rnd() * 100, y: rnd() * 58,
     alt=""
     width="300"
     height="302"
-    class="pointer-events-none absolute top-[3%] right-[6%] -z-10 hidden w-[26%] max-w-[150px] dark:block"
+    class="sky-glow pointer-events-none absolute top-[3%] right-[6%] -z-10 hidden w-[26%] max-w-[150px] dark:block"
+    data-depth
+    style="--depth:7"
     loading="lazy"
     decoding="async"
   />
 
-  <div class:list={['pointer-events-none absolute inset-x-0 bottom-0 -z-10', isKualaLumpur ? 'h-[80%]' : 'h-[52%] sm:h-[55%]']}>
+  <!--
+    Clouds stay in the open sky above the AQI card (the top band, between the
+    sun and the left edge) so they never slide under the glass, and sit in front
+    of the sun so the small one drifts across its glow. --drift = travel each way.
+    The viewBox starts at y=-16: the cloud's top arcs rise to about y=-11, and the
+    path bobs up 3 units (liquid.css), so a 0-based viewBox would shear the tops flat.
+  -->
+  <svg class="sky-cloud pointer-events-none absolute top-[5%] left-[5%] -z-10 w-[34%] max-w-[230px] dark:hidden" data-depth style="--depth:14; --drift:34px" viewBox="0 -16 220 96" aria-hidden="true">
+    <path d="M30 70h150a26 26 0 0 0 3-51.8A36 36 0 0 0 115 10a32 32 0 0 0-58 12A24 24 0 0 0 30 70Z" fill="var(--cloud)" />
+  </svg>
+  <svg class="sky-cloud sky-cloud-2 pointer-events-none absolute top-[9%] left-[48%] -z-10 w-[20%] max-w-[140px] dark:hidden" data-depth style="--depth:9; --drift:22px" viewBox="0 -16 220 96" aria-hidden="true">
+    <path d="M30 70h150a26 26 0 0 0 3-51.8A36 36 0 0 0 115 10a32 32 0 0 0-58 12A24 24 0 0 0 30 70Z" fill="var(--cloud)" opacity="0.85" />
+  </svg>
+
+  <div data-depth="skyline" class:list={['pointer-events-none absolute inset-x-0 bottom-0 -z-10', isKualaLumpur ? 'h-[80%]' : 'h-[52%] sm:h-[55%]']}>
     {
       isKualaLumpur ? (
         <>

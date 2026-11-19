@@ -56,32 +56,37 @@ function withKey(params: URLSearchParams) {
  */
 export async function fetchAirQuality(points: Point[], range: AqRange): Promise<AirQualitySeries[]> {
   const BATCH = 100;
+  const batches: Point[][] = [];
+  for (let i = 0; i < points.length; i += BATCH) batches.push(points.slice(i, i + BATCH));
+  // Batches run in parallel (same total quota use, a third of the wait for ~300 cities).
+  const results = await Promise.all(batches.map((batch) => fetchAirQualityBatch(batch, range)));
+  return results.flat();
+}
+
+async function fetchAirQualityBatch(batch: Point[], range: AqRange): Promise<AirQualitySeries[]> {
   const out: AirQualitySeries[] = [];
-  for (let i = 0; i < points.length; i += BATCH) {
-    const batch = points.slice(i, i + BATCH);
-    const params = withKey(
-      new URLSearchParams({
-        latitude: batch.map((p) => coord(p.lat)).join(','),
-        longitude: batch.map((p) => coord(p.lon)).join(','),
-        hourly: Object.values(AQ_VARIABLES).join(','),
-        past_hours: String(range.pastHours),
-        forecast_hours: String(range.forecastHours),
-        timeformat: 'unixtime',
-        timezone: batch.length === 1 ? 'auto' : 'GMT',
-        domains: 'auto',
-      }),
-    );
-    const res = await fetchJson<AqResponse | AqResponse[]>(`${openMeteo.airQualityUrl}?${params}`, { timeoutMs: 15000 });
-    const list = Array.isArray(res) ? res : [res];
-    if (list.length !== batch.length) throw new UpstreamError('invalid', 'Unexpected number of locations in response');
-    for (const r of list) {
-      if (!r.hourly?.time) throw new UpstreamError('invalid', 'Missing hourly data');
-      const h = r.hourly;
-      const values = Object.fromEntries(
-        Object.entries(AQ_VARIABLES).map(([id, name]) => [id, (h[name] as Array<number | null> | undefined) ?? h.time.map(() => null)]),
-      ) as unknown as PollutantSeries;
-      out.push({ time: h.time, values, gridLat: r.latitude, gridLon: r.longitude, timezone: r.timezone });
-    }
+  const params = withKey(
+    new URLSearchParams({
+      latitude: batch.map((p) => coord(p.lat)).join(','),
+      longitude: batch.map((p) => coord(p.lon)).join(','),
+      hourly: Object.values(AQ_VARIABLES).join(','),
+      past_hours: String(range.pastHours),
+      forecast_hours: String(range.forecastHours),
+      timeformat: 'unixtime',
+      timezone: batch.length === 1 ? 'auto' : 'GMT',
+      domains: 'auto',
+    }),
+  );
+  const res = await fetchJson<AqResponse | AqResponse[]>(`${openMeteo.airQualityUrl}?${params}`, { timeoutMs: 15000 });
+  const list = Array.isArray(res) ? res : [res];
+  if (list.length !== batch.length) throw new UpstreamError('invalid', 'Unexpected number of locations in response');
+  for (const r of list) {
+    if (!r.hourly?.time) throw new UpstreamError('invalid', 'Missing hourly data');
+    const h = r.hourly;
+    const values = Object.fromEntries(
+      Object.entries(AQ_VARIABLES).map(([id, name]) => [id, (h[name] as Array<number | null> | undefined) ?? h.time.map(() => null)]),
+    ) as unknown as PollutantSeries;
+    out.push({ time: h.time, values, gridLat: r.latitude, gridLon: r.longitude, timezone: r.timezone });
   }
   return out;
 }
@@ -102,10 +107,13 @@ export interface Weather {
   uvIndex: number | null;
   weatherCode: number | null;
   isDay: boolean;
+  /** [sunrise, sunset] (unix seconds) for today and tomorrow, local days; empty in polar day/night. */
+  sun?: Array<[number, number]>;
 }
 
 interface WeatherResponse {
   current?: Record<string, number | null> & { time: number };
+  daily?: { sunrise?: Array<number | null>; sunset?: Array<number | null> };
 }
 
 export async function fetchWeather(p: Point): Promise<Weather> {
@@ -115,6 +123,9 @@ export async function fetchWeather(p: Point): Promise<Weather> {
       longitude: coord(p.lon),
       current:
         'temperature_2m,relative_humidity_2m,apparent_temperature,is_day,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m,surface_pressure,uv_index',
+      // Sunrise/sunset let pages pick day or night at render time, not when this was cached.
+      daily: 'sunrise,sunset',
+      forecast_days: '2',
       wind_speed_unit: 'kmh',
       timeformat: 'unixtime',
       timezone: 'auto',
@@ -136,7 +147,19 @@ export async function fetchWeather(p: Point): Promise<Weather> {
     uvIndex: n('uv_index'),
     weatherCode: n('weather_code'),
     isDay: c.is_day === 1,
+    sun: sunTimes(res.daily),
   };
+}
+
+function sunTimes(daily: WeatherResponse['daily']): Array<[number, number]> {
+  const rise = daily?.sunrise ?? [];
+  const set = daily?.sunset ?? [];
+  const out: Array<[number, number]> = [];
+  rise.forEach((r, i) => {
+    const s = set[i];
+    if (typeof r === 'number' && typeof s === 'number' && s > r) out.push([r, s]);
+  });
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -152,6 +175,8 @@ export interface GeoResult {
   country_code?: string;
   country?: string;
   admin1?: string;
+  /** District / county. */
+  admin2?: string;
   timezone?: string;
   population?: number;
 }

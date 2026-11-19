@@ -1,0 +1,105 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+export const prerender = false;
+Astro.cache.set({ maxAge: 86400, swr: 604800 });
+---
+
+<BaseLayout
+  title="Terms & Conditions — Live AQI"
+  description="The terms for using Live AQI: an information service for real-time air quality, not medical advice. Data sources, alerts, acceptable use and liability."
+  canonicalPath="/terms"
+>
+  <section class="stage">
+    <div class="shell pt-10 pb-12 lg:pt-14 lg:pb-16">
+      <h1 class="type-hero max-w-4xl">Terms &amp; conditions</h1>
+      <p class="mt-6 max-w-2xl text-lg text-on-stage-muted">
+        The short version: Live AQI is free information about the air, offered in good faith. Use it to make better
+        decisions, not as a medical or emergency service.
+      </p>
+    </div>
+  </section>
+
+  <article class="shell py-12 lg:py-16">
+    <div class="prose-reading">
+      <p class="text-sm text-subtle">Last updated 19 November 2026</p>
+
+      <h2>Using Live AQI</h2>
+      <p>
+        These terms apply to live-aqi.com and its notifications (together, “Live AQI”). By using Live AQI you agree to them.
+        If you don’t agree, please don’t use the site. Live AQI is free and works without an account.
+      </p>
+
+      <h2>Information, not medical advice</h2>
+      <ul>
+        <li>Live AQI shows air quality readings, forecasts and general health guidance based on official index statements. It is not medical advice and does not replace advice from a doctor.</li>
+        <li>Live AQI does not issue official advisories or emergency warnings. In an emergency, or when your local health or environment authority gives instructions, follow them.</li>
+        <li>If you have a health condition that air pollution affects, talk to a healthcare professional about what levels are safe for you.</li>
+      </ul>
+
+      <h2>About the data</h2>
+      <ul>
+        <li>Readings are computed from model data (the Copernicus Atmosphere Monitoring Service, delivered by Open-Meteo) and, where enabled, ground monitoring stations. Model values can differ from a nearby monitor, and forecasts are uncertain by nature.</li>
+        <li>Each reading is labelled with its time and source. When a provider is unavailable, Live AQI shows an error or the last real data with its age; it never invents values.</li>
+        <li>All data is provided “as is”, without any promise that it is complete, accurate or available at all times. How Live AQI calculates each index is explained in the <a href="/methodology">methodology</a>.</li>
+      </ul>
+
+      <h2>Alerts and notifications</h2>
+      <p>
+        Alerts are a convenience. In-page alerts only run while a Live AQI page is open, and background notifications depend
+        on your browser, your device settings and your browser’s push service. Notifications can be delayed or not arrive at
+        all, so don’t rely on them as your only warning of dangerous air. You can turn them off at any time on the{' '}
+        <a href="/alerts">alerts page</a> or in your browser settings.
+      </p>
+
+      <h2>Acceptable use</h2>
+      <ul>
+        <li>Use Live AQI for personal, non-commercial information, or link to its pages freely.</li>
+        <li>Don’t scrape the site or call its <code>/api/</code> endpoints in bulk or from automated systems; requests are rate-limited to protect the shared data quotas that keep Live AQI free.</li>
+        <li>Don’t attempt to disrupt, overload or gain unauthorised access to the service, or present Live AQI data as an official government reading.</li>
+      </ul>
+
+      <h2>Data sources and attribution</h2>
+      <p>
+        Live AQI is built on open data, each under its own licence: air quality and weather from{' '}
+        <a href="https://open-meteo.com/" rel="noopener">Open-Meteo</a> (CC BY 4.0) using the{' '}
+        <a href="https://atmosphere.copernicus.eu/" rel="noopener">Copernicus Atmosphere Monitoring Service</a>; places from{' '}
+        <a href="https://www.geonames.org/" rel="noopener">GeoNames</a> (CC BY 4.0) and{' '}
+        <a href="https://www.openstreetmap.org/copyright" rel="noopener">OpenStreetMap</a> (ODbL); map tiles from{' '}
+        <a href="https://openfreemap.org/" rel="noopener">OpenFreeMap</a>. If you reuse any of that data, the original
+        provider’s licence applies.
+      </p>
+
+      <h2>Our content</h2>
+      <p>
+        The Live AQI name, logo, design, illustrations, text and software are owned by Live AQI and may not be copied or
+        reused without permission, apart from sharing links and screenshots with attribution.
+      </p>
+
+      <h2>Links to other sites</h2>
+      <p>
+        Live AQI links to data providers and other websites. We are not responsible for their content, availability or
+        privacy practices.
+      </p>
+
+      <h2>Limitation of liability</h2>
+      <p>
+        To the fullest extent permitted by law, Live AQI is provided without warranties of any kind, and Live AQI is not
+        liable for any loss or damage arising from your use of the site, its data or its notifications, or from decisions
+        made using them. Nothing in these terms limits any rights you have that cannot be limited by law.
+      </p>
+
+      <h2>Changes</h2>
+      <p>
+        We may change or discontinue features, and update these terms when the service changes. The date at the top shows the
+        latest version; continuing to use Live AQI after a change means you accept the updated terms.
+      </p>
+
+      <h2>Contact</h2>
+      <p>
+        Questions about these terms: <a href="mailto:contact@live-aqi.com">contact@live-aqi.com</a>, or see the{' '}
+        <a href="/contact">contact page</a>. How we handle personal data is covered in the <a href="/privacy">privacy policy</a>.
+      </p>
+    </div>
+  </article>
+</BaseLayout>

@@ -26,6 +26,16 @@ Read this before changing any UI. Tokens live in `src/styles/global.css`; compon
 - **Both themes are first-class.** Every colour is a CSS variable that changes with `[data-theme]`. Never hard-code a
   hex in a component; for category text use `text-(--num-l) dark:text-(--num-d)` with the category's `text` colours.
 - **Calm motion.** Hover/press transitions only; toasts rise in. No looping or decorative animation.
+  Every button-like control (`.btn`, `.glass-pill`, `.seg` options, nav pills, anything with `data-press`) gets the
+  shared press: a quick scale-down with a soft spring back, plus a light that blooms from the point clicked and fades
+  on release (`--lg-ink`, `motion.ts`). Segmented-control thumbs glide to the new option; the phone menu unfolds and
+  its icon turns into a close mark. Wide controls set a shallower `--press` inline (e.g. `0.97`).
+- **Arrival splash** (`Preloader.astro`): on a new visit, a link from another site or a reload, the mark draws
+  itself over the sky (≥ 0.95 s, ≤ 4 s), then lifts while the hero makes its entrance underneath. Never on
+  in-site navigation (the page transition covers that) or without JavaScript. Hero animations pause under
+  `html.preloading`; `motion.ts` waits for the `laqi:preloaded` event before reveals, count-ups and chart draw-ins.
+- **Logo**: the cloud-sun outline on a cyan → deep-navy tile (`Logo.astro`); favicons and app icons are generated
+  from the same drawing by `npm run brand-assets`.
 
 ## Tokens
 | Group | Tokens |

@@ -2,7 +2,7 @@
  * Domain layer: turns raw provider data into the reports the UI renders.
  * UI components never call providers directly — only these functions.
  */
-import { computeAqi, currentHourIndex, latestConcentrations, trailingMean, type AqiResult, type PollutantSeries } from '../aqi/compute';
+import { computeAqi, currentHourIndex, latestConcentrations, max8hMeanIn24h, trailingMean, type AqiResult, type PollutantSeries } from '../aqi/compute';
 import { POLLUTANT_IDS, categoryFor, type PollutantId, type StandardId } from '../aqi/standards';
 import { TTL } from '../config';
 import {
@@ -14,14 +14,17 @@ import {
   monitoredCities,
   citiesInCountry,
   distinctCities,
+  distanceKm,
+  isCityNamed,
   nearestCity,
   resolveAlias,
   slugify,
   type City,
   type Place,
 } from '../geo/places';
-import { cached } from './cache';
+import { cached, prewarm } from './cache';
 import { fetchAirQuality, fetchWeather, geocodeById, type AirQualitySeries, type Weather } from './open-meteo';
+import { osmLookup, osmSlug, parseOsmSlug } from './osm';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -40,11 +43,11 @@ export interface CurrentReading {
   /** Hour the values are valid for (unix seconds, UTC). */
   time: number;
   aqi: Record<StandardId, AqiResult | null>;
-  /** Hourly concentration at `time` (µg/m³; CO in mg/m³). */
+  /** Latest hourly concentration at or shortly before `time` (µg/m³; CO in mg/m³). */
   concentrations: Partial<Record<PollutantId, number>>;
   /** 24-hour means ending at `time` (µg/m³; CO in mg/m³). */
   means24: Partial<Record<PollutantId, number>>;
-  /** 8-hour means ending at `time` for O3 and CO. */
+  /** Highest 8-hour mean within the 24 h ending at `time`, for O3 and CO (µg/m³; CO in mg/m³). */
   means8: Partial<Record<'o3' | 'co', number>>;
 }
 
@@ -129,11 +132,14 @@ function buildCurrent(series: PollutantSeries, t: number, time: number): Current
     const v = mean(series[p], t, 24, 16, p === 'co' ? 1000 : 1);
     if (v !== undefined) means24[p] = v;
   }
+  // 8-hour guidelines (WHO O₃, India O₃/CO) are set on the day's highest 8-hour mean,
+  // so compare against the max 8-h mean of the last 24 h — the same value the India
+  // sub-index uses — not just the latest 8 hours.
   const means8: Partial<Record<'o3' | 'co', number>> = {};
-  const o3 = mean(series.o3, t, 8, 6);
-  const co = mean(series.co, t, 8, 6, 1000);
-  if (o3 !== undefined) means8.o3 = o3;
-  if (co !== undefined) means8.co = co;
+  const o3 = max8hMeanIn24h(series.o3, t);
+  const co = max8hMeanIn24h(series.co, t);
+  if (o3 !== null) means8.o3 = o3;
+  if (co !== null) means8.co = co / 1000;
   return {
     time,
     aqi: { us: computeAqi('us', series, t), in: computeAqi('in', series, t) },
@@ -345,11 +351,23 @@ function readSnapshot(data: SnapshotData, lookup: Map<number, City>, fetchedAt: 
   return { readings, validTime, fetchedAt, stale, requested: data.requested, trend: data.trend };
 }
 
+const WORLD_KEY = 'world:v3';
+
 /** Global snapshot of ~300 major cities. Shared across all visitors via KV. */
 export async function getWorldSnapshot(): Promise<Snapshot> {
   const cities = monitoredCities();
-  const res = await cached('world:v3', { ...TTL.world, kv: true }, () => buildSnapshot(cities, 48, false));
+  const res = await cached(WORLD_KEY, { ...TTL.world, kv: true }, () => buildSnapshot(cities, 48, false));
   return readSnapshot(res.value, new Map(cities.map((c) => [c.id, c])), res.fetchedAt, res.stale);
+}
+
+/**
+ * Called by the 30-minute cron: rebuild the world snapshot shortly before it stops
+ * being fresh, so page requests only ever read it. Same upstream usage as before
+ * (one rebuild per ~3 h), but no visitor waits for it.
+ */
+export function prewarmWorldSnapshot(): Promise<boolean> {
+  const cities = monitoredCities();
+  return prewarm(WORLD_KEY, { ...TTL.world, kv: true }, () => buildSnapshot(cities, 48, false), TTL.world.fresh - 30 * 60);
 }
 
 /** Country (or region within a country) snapshot: the most populous cities + 7-day median trend. */
@@ -382,13 +400,42 @@ export function readingChange(r: CityReading, std: StandardId): number | null {
 
 export type SlugResolution = { place: Place } | { redirect: string } | null;
 
-/** Resolve `/city/[slug]`: dataset cities, aliases, or `<name>-<geonamesId>` places. */
+/**
+ * Resolve `/city/[slug]`: dataset cities, aliases, `<name>-<geonamesId>` places, or
+ * `<name>-n<osmId>` (also -w / -r) OpenStreetMap places that GeoNames doesn't list.
+ */
 export async function resolveCitySlug(slug: string): Promise<SlugResolution> {
   const clean = slug.toLowerCase();
   const city = getCityBySlug(clean);
   if (city) return { place: cityToPlace(city) };
   const alias = resolveAlias(clean);
   if (alias) return { redirect: `/city/${alias}` };
+
+  const osm = parseOsmSlug(clean);
+  if (osm) {
+    const hit = await cached(`osm:id:${osm.osmType}${osm.osmId}`, TTL.geocode, () => osmLookup(osm.osmType, osm.osmId));
+    const p = hit.value;
+    if (!p) return null;
+    const canonical = osmSlug(p);
+    if (canonical !== clean) return { redirect: `/city/${canonical}` };
+    // The same town is already a dataset city: use its page.
+    const near = nearestCity(p.lat, p.lon);
+    if (near && near.distanceKm <= 15 && isCityNamed(near.city, p.name)) return { redirect: `/city/${near.city.slug}` };
+    return {
+      place: {
+        kind: 'place',
+        id: null,
+        slug: canonical,
+        name: p.name,
+        region: p.region,
+        cc: p.cc,
+        country: getCountry(p.cc)?.name ?? p.country ?? p.cc,
+        lat: p.lat,
+        lon: p.lon,
+        timezone: timezoneNear(p.lat, p.lon, p.cc),
+      },
+    };
+  }
 
   const m = /^(.*)-(\d{3,10})$/.exec(clean);
   if (!m) return null;
@@ -417,6 +464,20 @@ export async function resolveCitySlug(slug: string): Promise<SlugResolution> {
   };
 }
 
+/** OSM has no time zones: borrow the nearest dataset city's, in the same country when there is one. */
+function timezoneNear(lat: number, lon: number, cc: string): string {
+  let best: City | undefined;
+  let bestD = Infinity;
+  for (const c of citiesInCountry(cc)) {
+    const d = distanceKm(lat, lon, c.lat, c.lon);
+    if (d < bestD) {
+      bestD = d;
+      best = c;
+    }
+  }
+  return (best ?? nearestCity(lat, lon)?.city)?.timezone ?? 'UTC';
+}
+
 /** Href for a place's dashboard. */
 export function placeHref(place: Pick<Place, 'slug'>): string {
   return `/city/${place.slug}`;
@@ -425,7 +486,7 @@ export function placeHref(place: Pick<Place, 'slug'>): string {
 /**
  * Location token stored in the `laqi_loc` cookie / localStorage:
  *   `s:<slug>`        a city page slug
- *   `g:<lat>,<lon>`   precise coordinates (rounded to ~1 km)
+ *   `g:<lat>,<lon>`   coordinates (rounded to 0.1°, about 11 km)
  */
 export async function resolveLocationToken(token: string | undefined): Promise<Place | null> {
   if (!token) return null;
@@ -446,6 +507,13 @@ export async function resolveLocationToken(token: string | undefined): Promise<P
   return null;
 }
 
+/**
+ * Coordinates are snapped to 0.1°, which is no finer than the air-quality models' grid
+ * (≈11 km in Europe, ≈45 km elsewhere), so the reading barely changes. This bounds the
+ * number of distinct cache keys, and so the upstream calls a client can trigger.
+ */
+const snap = (n: number) => Math.round(n * 10) / 10;
+
 /** Nearest known city within 10 km, otherwise a coordinate-based place named after it. */
 export function placeFromCoordinates(lat: number, lon: number): Place | null {
   const near = nearestCity(lat, lon);
@@ -457,8 +525,8 @@ export function placeFromCoordinates(lat: number, lon: number): Place | null {
     kind: 'place',
     id: null,
     name: `Near ${near.city.name}`,
-    lat: Math.round(lat * 100) / 100,
-    lon: Math.round(lon * 100) / 100,
+    lat: snap(lat),
+    lon: snap(lon),
     population: undefined,
   };
 }

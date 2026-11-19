@@ -8,7 +8,15 @@ import { defaultStandardFor } from '../aqi/standards';
 import { push } from '../config';
 import { getLocationReport, resolveLocationToken, type LocationReport } from '../services/reports';
 import type { Place } from '../geo/places';
-import { allSubscriptions, deleteSubscription, kvStore, putSubscription, type StoredSubscription } from './subscriptions';
+import {
+  allSubscriptions,
+  deleteSubscription,
+  kvStore,
+  MESSAGE_TTL_SECONDS,
+  putPendingMessage,
+  putSubscription,
+  type StoredSubscription,
+} from './subscriptions';
 import { sendPush } from './vapid';
 
 export interface SweepResult {
@@ -20,7 +28,7 @@ export interface SweepResult {
 
 export async function deliver(sub: StoredSubscription, urgency: 'normal' | 'high'): Promise<'sent' | 'gone' | 'failed'> {
   try {
-    const res = await sendPush(sub.endpoint, { urgency, topic: `aqi${sub.id.slice(0, 20)}`, ttlSeconds: 6 * 60 * 60 });
+    const res = await sendPush(sub.endpoint, { urgency, topic: `aqi${sub.id.slice(0, 20)}`, ttlSeconds: MESSAGE_TTL_SECONDS });
     if (res.gone) {
       await deleteSubscription(sub.endpoint);
       return 'gone';
@@ -32,6 +40,11 @@ export async function deliver(sub: StoredSubscription, urgency: 'normal' | 'high
     return 'failed';
   }
 }
+
+/** A failed alert is retried on later sweeps, up to this many attempts in total. */
+const MAX_DELIVERY_ATTEMPTS = 3;
+/** Subscribers processed at the same time. */
+const SWEEP_CONCURRENCY = 6;
 
 export async function runAlertSweep(): Promise<SweepResult> {
   const result: SweepResult = { checked: 0, sent: 0, removed: 0, errors: 0 };
@@ -54,34 +67,66 @@ export async function runAlertSweep(): Promise<SweepResult> {
     return p;
   };
 
-  for await (const sub of allSubscriptions()) {
+  const processOne = async (sub: StoredSubscription) => {
     result.checked++;
-    const data = await load(sub.location.token);
-    if (!data) {
+    // One subscriber's failure (KV quota, a bad record) must not end the sweep for everyone else.
+    try {
+      const data = await load(sub.location.token);
+      if (!data) {
+        result.errors++;
+        return;
+      }
+      const std = sub.prefs.standard === 'auto' ? defaultStandardFor(data.place.cc) : sub.prefs.standard;
+      const reading = data.report.current.aqi[std];
+      if (!reading) return;
+
+      const { kind, next } = evaluateAlert(sub.state, reading.category.level, data.report.current.time, sub.prefs.threshold, sub.prefs);
+      if (!kind) {
+        // No notification; save the state only if it changed (KV writes are metered).
+        if (JSON.stringify(next) !== JSON.stringify(sub.state)) {
+          await putSubscription({ ...sub, state: next, updatedAt: Date.now() });
+        }
+        return;
+      }
+
+      const msg = composeAlert(kind, sub.location.name, std, reading.aqi, reading.category.level, reading.dominant);
+      await putPendingMessage(sub.id, { ...msg, url: `/city/${data.place.slug}`, createdAt: Date.now() });
+      const outcome = await deliver(sub, kind === 'severe' ? 'high' : 'normal');
+      if (outcome === 'gone') {
+        result.removed++;
+        return;
+      }
+      if (outcome === 'sent') {
+        result.sent++;
+        await putSubscription({ ...sub, state: next, failedAttempts: 0, updatedAt: Date.now() });
+        return;
+      }
+      // Not delivered: keep the old state so the next sweep tries again, unless this
+      // alert has already failed several times (e.g. a broken endpoint).
       result.errors++;
-      continue;
+      const attempts = (sub.failedAttempts ?? 0) + 1;
+      await putSubscription(
+        attempts >= MAX_DELIVERY_ATTEMPTS
+          ? { ...sub, state: next, failedAttempts: 0, updatedAt: Date.now() }
+          : { ...sub, failedAttempts: attempts, updatedAt: Date.now() },
+      );
+    } catch (err) {
+      result.errors++;
+      console.error('[sweep] subscriber', sub.id, 'failed', err);
     }
-    const std = sub.prefs.standard === 'auto' ? defaultStandardFor(data.place.cc) : sub.prefs.standard;
-    const reading = data.report.current.aqi[std];
-    if (!reading) continue;
+  };
 
-    const { kind, next } = evaluateAlert(sub.state, reading.category.level, data.report.current.time, sub.prefs.threshold, sub.prefs);
-    const stateChanged = JSON.stringify(next) !== JSON.stringify(sub.state);
-    if (!kind && !stateChanged) continue; // nothing new — no KV write
-
-    const updated: StoredSubscription = { ...sub, state: next, updatedAt: Date.now() };
-    if (kind) {
-      const msg = composeAlert(kind, sub.location.name, std, reading.aqi, reading.category.level);
-      updated.pending = { ...msg, url: `/city/${data.place.slug}`, createdAt: Date.now() };
-    }
-    await putSubscription(updated);
-    if (kind) {
-      const outcome = await deliver(updated, kind === 'severe' ? 'high' : 'normal');
-      if (outcome === 'sent') result.sent++;
-      else if (outcome === 'gone') result.removed++;
-      else result.errors++;
+  // Small parallel batches: much faster than one at a time, while staying well under
+  // the runtime's limit on simultaneous connections.
+  let batch: StoredSubscription[] = [];
+  for await (const sub of allSubscriptions()) {
+    batch.push(sub);
+    if (batch.length >= SWEEP_CONCURRENCY) {
+      await Promise.all(batch.map(processOne));
+      batch = [];
     }
   }
+  await Promise.all(batch.map(processOne));
   console.log('[sweep]', JSON.stringify(result));
   return result;
 }

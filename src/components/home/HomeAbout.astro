@@ -1,0 +1,149 @@
+---
+/**
+ * Long-form copy about the tool for the home page (~1,000 words), aimed at the
+ * "AQI today / live AQI / AQI near me / air quality index" searches in
+ * .docs/seo-keywords.md. The level ranges come from the same tables the dashboards use.
+ */
+import Icon from '../ui/Icon.astro';
+import { STANDARDS, type StandardId } from '../../lib/aqi/standards';
+import { POPULAR_CITIES } from '../../lib/seo';
+
+const scales = (['in', 'us'] as const).map((id: StandardId) => ({
+  id,
+  title: id === 'in' ? 'India NAQI (CPCB)' : 'US AQI (EPA)',
+  rows: STANDARDS[id].categories.map((c) => ({
+    label: c.label,
+    color: c.color,
+    range: c.max === Infinity ? `${c.min}+` : `${c.min}–${c.max}`,
+  })),
+}));
+---
+
+<section class="shell py-20 lg:py-28" aria-labelledby="about-tool-title">
+  <div class="grid gap-12 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] lg:gap-16">
+    <article class="prose-reading" data-reveal>
+      <h2 id="about-tool-title" class="type-section mt-0">Live AQI: check today’s air quality near you</h2>
+      <p>
+        Live AQI is a free, real-time air quality index for every city in the world. Open the page and it shows the
+        <strong>AQI today</strong> for where you are: one number from 0 to 500, its colour and level, the pollutant driving it
+        and what it means for your health. There is no account to create and no app to install; the live air quality index
+        works on any phone or computer.
+      </p>
+      <p>
+        Air pollution changes by the hour. A morning that starts “Moderate” can turn “Poor” by evening as traffic builds, the
+        wind drops or smoke drifts in from crop fires. Live AQI is built for the moment you need to decide whether to go for a
+        run, open the windows or send the children out to play. It answers one question with numbers you can check: is the air
+        safe right now, and what should I do about it?
+      </p>
+
+      <h3>What Live AQI shows for every place</h3>
+      <ul>
+        <li>The current AQI on India’s National Air Quality Index (CPCB) and on the US EPA AQI, with its level from Good to Severe or Hazardous.</li>
+        <li>Pollutant levels for PM2.5, PM10, ozone (O₃), nitrogen dioxide (NO₂), sulphur dioxide (SO₂) and carbon monoxide (CO), in µg/m³.</li>
+        <li>The AQI over the last 24 hours and 7 days, plus a 48-hour air quality forecast.</li>
+        <li>Health advice for the current level: who is at risk, whether to exercise outdoors, and when to wear a mask or close the windows.</li>
+        <li>The weather that shapes pollution, such as temperature, humidity, wind and rain.</li>
+        <li>Nearby places and, where available, ground monitoring stations.</li>
+      </ul>
+
+      <h3>How to check the AQI near you</h3>
+      <ol class="list-decimal space-y-1.5 pl-5">
+        <li>Open Live AQI. The dashboard starts from an approximate location based on your connection, or the place you chose last time.</li>
+        <li>Tap “Use my location” for a reading for your exact area, or search any city, town or village. Coordinates are rounded to about 1 km.</li>
+        <li>Read the AQI number and its colour, then the health advice beneath it.</li>
+        <li>Check the 48-hour forecast to plan the cleanest time to be outdoors.</li>
+        <li>Turn on <a href="/alerts">air quality alerts</a> to hear when the air crosses the level you choose.</li>
+      </ol>
+
+      <h3>India AQI and US AQI on one page</h3>
+      <p>
+        India and the United States measure the same pollutants but grade them differently. India’s National Air Quality Index,
+        published by the Central Pollution Control Board (CPCB), runs from Good (0–50) and Satisfactory (51–100) through
+        Moderate, Poor and Very Poor to Severe (above 400), and averages particles over 24 hours. The US AQI uses tighter bands,
+        where anything above 150 is already “Unhealthy”, and NowCast averages that react faster to change. Live AQI computes
+        both from the same hourly data, shows the India NAQI by default for places in India and the US AQI everywhere else, and
+        lets you switch with one tap. The two are never blended into one number. Learn <a href="/what-is-aqi">what each AQI level means</a>.
+      </p>
+
+      <h3>AQI today in Delhi, Mumbai and other cities</h3>
+      <p>
+        Interest in the AQI peaks every winter in North India, when Delhi, Noida, Gurgaon and Ghaziabad often reach “Very
+        Poor” or “Severe” levels. Every city has its own page with the live AQI today, the highest reading of the past week,
+        the forecast and answers to common questions. The most searched city pages:
+      </p>
+      <ul class="mt-4 flex list-none flex-wrap gap-2 pl-0" aria-label="Popular city AQI pages">
+        {
+          POPULAR_CITIES.slice(0, 12).map((c) => (
+            <li class="mt-0">
+              <a href={`/city/${c.slug}`} class="chip no-underline hover:underline">
+                {c.label} AQI
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+      <p>
+        Beyond India, Live AQI covers every country. Open the <a href="/map">live AQI map</a> to see air quality across the
+        world, the <a href="/rankings">AQI ranking</a> for the most polluted and cleanest cities right now, or a country page
+        such as <a href="/country/india">India AQI</a> to compare its cities and regions.
+      </p>
+
+      <h3>Where the data comes from</h3>
+      <p>
+        Live AQI calculates every index itself from hourly pollutant concentrations produced by the Copernicus Atmosphere
+        Monitoring Service (CAMS), the European Union’s atmosphere monitoring programme, and delivered by Open-Meteo. CAMS
+        combines satellite observations, ground measurements and weather models into a consistent picture of the atmosphere,
+        at about 11 km resolution over Europe and 45 km worldwide. That is why Live AQI can show a reading, a week of history
+        and a forecast for any village, not only for cities with a monitoring station. Because this is model data, a single
+        roadside monitor can read higher or lower. Every reading is labelled with its source and time, and if a provider is
+        down, Live AQI says so instead of guessing. The <a href="/methodology">methodology</a> lists every breakpoint and rule.
+      </p>
+
+      <h3>Pollution alerts that respect you</h3>
+      <p>
+        Choose a place and a level on the alerts page, and Live AQI tells you when the air there crosses it: while the page is
+        open, or as a background notification on your phone or computer. It can also tell you when the air recovers, and warn
+        you about severe pollution. There are no accounts and no sale of personal data; the <a href="/privacy">privacy policy</a>{' '}
+        explains exactly what is stored.
+      </p>
+
+      <h3>Who Live AQI is for</h3>
+      <p>
+        Parents deciding whether it is a day for the park, runners and cyclists planning a route, people with asthma or COPD
+        watching for bad-air days, and anyone who wants to know what they are breathing. It also helps schools, offices and
+        housing societies time outdoor activities around the cleanest hours. Live AQI provides information, not medical advice:
+        in an emergency, follow your local health authority.
+      </p>
+    </article>
+
+    <aside class="lg:sticky lg:top-24 lg:self-start" aria-label="AQI levels at a glance" data-reveal>
+      <div class="card p-5 sm:p-6">
+        <p class="font-bold">AQI levels at a glance</p>
+        <div class="mt-4 grid gap-6 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+          {
+            scales.map((s) => (
+              <div>
+                <p class="text-xs font-semibold text-ink-3">{s.title}</p>
+                <ul class="mt-2 space-y-1.5 text-sm">
+                  {s.rows.map((r) => (
+                    <li class="flex items-center justify-between gap-3">
+                      <span class="flex items-center gap-2">
+                        <span class="swatch" style={`--cat:${r.color}`} />
+                        {r.label}
+                      </span>
+                      <span class="font-mono text-xs whitespace-nowrap text-ink-2">{r.range}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))
+          }
+        </div>
+        <div class="mt-6 flex flex-wrap gap-2 border-t border-line pt-5">
+          <a href="/what-is-aqi" class="btn btn-secondary">AQI meaning <Icon name="arrow-right" size={16} /></a>
+          <a href="/alerts" class="btn btn-primary"><Icon name="bell" size={17} /> Get alerts</a>
+        </div>
+      </div>
+    </aside>
+  </div>
+</section>

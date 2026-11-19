@@ -1,6 +1,7 @@
 ---
 import Logo from './ui/Logo.astro';
 import { waqi } from '../lib/config';
+import { POPULAR_CITIES } from '../lib/seo';
 
 const year = new Date().getFullYear();
 const columns = [
@@ -14,6 +15,11 @@ const columns = [
     ],
   },
   {
+    // The most searched "<city> aqi" queries, so those pages are linked from every page.
+    title: 'Popular',
+    links: POPULAR_CITIES.slice(0, 6).map((c) => ({ href: `/city/${c.slug}`, label: `${c.label} AQI` })),
+  },
+  {
     title: 'Countries',
     links: [
       { href: '/country/india', label: 'India' },
@@ -25,10 +31,13 @@ const columns = [
   {
     title: 'Live AQI',
     links: [
+      { href: '/what-is-aqi', label: 'What is AQI?' },
       { href: '/alerts', label: 'Alerts' },
       { href: '/about', label: 'About' },
       { href: '/methodology', label: 'Methodology' },
+      { href: '/contact', label: 'Contact' },
       { href: '/privacy', label: 'Privacy' },
+      { href: '/terms', label: 'Terms' },
     ],
   },
 ];
@@ -37,11 +46,11 @@ const columns = [
 <footer class="mt-auto border-t border-line bg-surface">
   <div class="shell grid gap-10 py-12 lg:grid-cols-[1.2fr_2fr] lg:py-14">
     <div class="max-w-sm">
-      <Logo size={26} />
+      <Logo size={32} />
       <p class="mt-4 text-ink-2">Real-time air quality for every city, with the health guidance and alerts to act on it.</p>
       <p class="mt-4 text-xs text-ink-3">Live AQI provides information, not medical advice. In an emergency, follow your local health authority.</p>
     </div>
-    <div class="grid grid-cols-2 gap-8 sm:grid-cols-3">
+    <div class="grid grid-cols-2 gap-8 sm:grid-cols-4">
       {
         columns.map((col) => (
           <nav aria-label={col.title}>
@@ -72,7 +81,9 @@ const columns = [
               ; stations:{' '}<a class="link" href="https://waqi.info/" rel="noopener">World Air Quality Index Project</a>
             </>
           )
-        }. Places:{' '}<a class="link" href="https://www.geonames.org/" rel="noopener">GeoNames</a>{' '}(CC BY 4.0). Map:{' '}
+        }. Places:{' '}<a class="link" href="https://www.geonames.org/" rel="noopener">GeoNames</a>{' '}(CC BY 4.0) and OpenStreetMap
+        (via <a class="link" href="https://photon.komoot.io/" rel="noopener">Photon</a>{' '}and{' '}
+        <a class="link" href="https://nominatim.org/" rel="noopener">Nominatim</a>). Map:{' '}
         <a class="link" href="https://openfreemap.org/" rel="noopener">OpenFreeMap</a>{' '}©{' '}
         <a class="link" href="https://www.openstreetmap.org/copyright" rel="noopener">OpenStreetMap</a>{' '}contributors.
       </p>

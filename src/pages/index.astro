@@ -2,6 +2,8 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import PlaceDashboard from '../components/aqi/PlaceDashboard.astro';
 import LocationBar from '../components/home/LocationBar.astro';
+import HomeAbout from '../components/home/HomeAbout.astro';
+import HomeFaq from '../components/home/HomeFaq.astro';
 import type { LocationSource } from '../components/home/types';
 import CityTable from '../components/ranking/CityTable.astro';
 import Icon from '../components/ui/Icon.astro';
@@ -11,6 +13,7 @@ import { loadDashboard } from '../lib/services/dashboard';
 import { defaultPlace, getWorldSnapshot, resolveLocationToken, type Snapshot } from '../lib/services/reports';
 import { formatHour, relativeTime } from '../lib/format';
 import { skyTheme } from '../lib/theme';
+import { HOME_FAQ, faqJsonLd } from '../lib/content/home-faq';
 
 export const prerender = false;
 
@@ -63,7 +66,7 @@ const jsonLd = [
     '@type': 'WebSite',
     name: 'Live AQI',
     url: `${site}/`,
-    description: 'Real-time air quality index worldwide with health recommendations and pollution alerts.',
+    description: 'Live AQI today near you: real-time air quality index for every city, with health advice and pollution alerts.',
   },
   {
     '@context': 'https://schema.org',
@@ -72,15 +75,17 @@ const jsonLd = [
     url: `${site}/`,
     logo: `${site}/icons/icon-512.png`,
   },
+  faqJsonLd(HOME_FAQ),
 ];
 ---
 
 <BaseLayout
-  title="Live AQI – Real-Time Air Quality Index Worldwide"
-  description="Check real-time air quality worldwide with Live AQI. Monitor pollution levels, PM2.5, PM10, city rankings, health recommendations, and air quality alerts."
+  title="Live AQI – AQI Today Near Me | Real-Time Air Quality Index"
+  description="Check today’s AQI near you: live air quality index for your location with PM2.5, PM10, pollution level and health advice. Delhi, Mumbai and cities worldwide."
   canonicalPath="/"
   jsonLd={jsonLd}
   theme={skyTheme(place, data.weather?.weather)}
+  sun={data.weather?.weather.sun}
   currentPlace={{ name: place.name }}
 >
   <PlaceDashboard data={data} standard={standard} shareUrl={`${site}/city/${place.slug}`}>
@@ -170,4 +175,7 @@ const jsonLd = [
       }
     </div>
   </section>
+
+  <HomeAbout />
+  <HomeFaq />
 </BaseLayout>

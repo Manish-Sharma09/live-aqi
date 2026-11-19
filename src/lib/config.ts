@@ -3,6 +3,7 @@
  * (Wrangler secrets in production, `.dev.vars` locally) and never reach the client.
  */
 import {
+  GA_MEASUREMENT_ID,
   OPEN_METEO_API_KEY,
   VAPID_PRIVATE_KEY,
   VAPID_PUBLIC_KEY,
@@ -45,9 +46,20 @@ export const waqi = {
 export const push = {
   publicKey: VAPID_PUBLIC_KEY || undefined,
   privateKey: VAPID_PRIVATE_KEY || undefined,
-  subject: VAPID_SUBJECT,
+  subject: VAPID_SUBJECT || 'mailto:alerts@live-aqi.com',
   get enabled() {
     return Boolean(this.publicKey && this.privateKey);
+  },
+};
+
+export const analytics = {
+  /** GA4 measurement ID, only if it looks like one ("G-" + letters/digits): it is written into a script. */
+  get gaId(): string | undefined {
+    const id = GA_MEASUREMENT_ID?.trim().toUpperCase();
+    return id && /^G-[A-Z0-9]{4,20}$/.test(id) ? id : undefined;
+  },
+  get enabled() {
+    return Boolean(this.gaId);
   },
 };
 

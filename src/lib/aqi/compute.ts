@@ -101,10 +101,13 @@ export function nowCast(values: ReadonlyArray<number | null>, end: number): numb
   return den > 0 ? num / den : null;
 }
 
-/** Maximum 8-hour trailing mean among the 24 hours ending at `end`. */
-function max8hMeanIn24h(values: ReadonlyArray<number | null>, end: number): number | null {
+/**
+ * Maximum 8-hour trailing mean among the 24 hours ending at `end`. Every window
+ * lies wholly inside those 24 hours (the earliest ends at `end - 16`).
+ */
+export function max8hMeanIn24h(values: ReadonlyArray<number | null>, end: number): number | null {
   let best: number | null = null;
-  for (let k = end - 23; k <= end; k++) {
+  for (let k = end - 16; k <= end; k++) {
     if (k < 7) continue;
     const m = trailingMean(values, k, 8, 6);
     if (m !== null && (best === null || m > best)) best = m;
@@ -155,6 +158,9 @@ function usSubIndices(s: PollutantSeries, t: number): Partial<Record<PollutantId
   }
 
   // Ozone: 8-hour index up to 0.200 ppm, and the 1-hour index from 0.125 ppm — report the higher.
+  // The 8-hour table stops at 0.200 ppm (AQI 300); an 8-hour mean above that is at least
+  // Very Unhealthy, so it holds the index at 300 instead of dropping out (higher values
+  // come from the 1-hour table).
   const o3_8 = trailingMean(s.o3, t, 8, 6);
   const o3_1 = isNum(s.o3[t]) ? s.o3[t]! : null;
   let o3Index: number | null = null;
@@ -162,10 +168,8 @@ function usSubIndices(s: PollutantSeries, t: number): Partial<Record<PollutantId
   let o3Label = '8-h mean';
   if (o3_8 !== null) {
     const ppm = trunc(ugm3ToPpb(o3_8, 'o3') / 1000, 3);
-    if (ppm <= 0.2) {
-      o3Index = usIndexFrom(US_BREAKPOINTS.o3_8h, ppm);
-      o3Avg = o3_8;
-    }
+    o3Index = ppm <= 0.2 ? usIndexFrom(US_BREAKPOINTS.o3_8h, ppm) : 300;
+    o3Avg = o3_8;
   }
   if (o3_1 !== null) {
     const ppm = trunc(ugm3ToPpb(o3_1, 'o3') / 1000, 3);
@@ -196,8 +200,11 @@ function usSubIndices(s: PollutantSeries, t: number): Partial<Record<PollutantId
     } else {
       const so2_24 = trailingMean(s.so2, t, 24, 18);
       const ppb24 = so2_24 !== null ? trunc(ugm3ToPpb(so2_24, 'so2'), 0) : null;
-      const index = ppb24 !== null && ppb24 >= 305 ? usIndexFrom(US_BREAKPOINTS.so2_24h, ppb24) : 200;
-      out.so2 = { pollutant: 'so2', index, averaged: so2_24 ?? so2_1, unit: 'µg/m³', averaging: so2_24 !== null ? '24-h mean' : '1-h' };
+      // EPA: above 304 ppb the 1-hour value can't define an index over 200; the 24-hour
+      // table applies only from 305 ppb. Report whichever average actually set the index.
+      const use24 = ppb24 !== null && ppb24 >= 305;
+      const index = use24 ? usIndexFrom(US_BREAKPOINTS.so2_24h, ppb24) : 200;
+      out.so2 = { pollutant: 'so2', index, averaged: use24 ? so2_24! : so2_1, unit: 'µg/m³', averaging: use24 ? '24-h mean' : '1-h' };
     }
   }
 
@@ -281,12 +288,24 @@ export function currentHourIndex(times: ReadonlyArray<number>, nowSec: number): 
   return idx;
 }
 
-/** Last valid concentration at or before `t` for each pollutant (µg/m³; CO in mg/m³). */
+/** How far back (hours) to look for a valid reading — matches NowCast's "2 of the 3 latest hours". */
+const LATEST_LOOKBACK_HOURS = 2;
+
+/**
+ * Last valid concentration at or before `t` (within the last few hours) for each
+ * pollutant (µg/m³; CO in mg/m³). A single missing hour no longer hides a
+ * pollutant whose sub-index is still valid.
+ */
 export function latestConcentrations(series: PollutantSeries, t: number): Partial<Record<PollutantId, number>> {
   const out: Partial<Record<PollutantId, number>> = {};
   for (const p of POLLUTANT_IDS) {
-    const v = series[p][t];
-    if (isNum(v)) out[p] = p === 'co' ? v / 1000 : v;
+    for (let i = t; i >= Math.max(0, t - LATEST_LOOKBACK_HOURS); i--) {
+      const v = series[p][i];
+      if (isNum(v)) {
+        out[p] = p === 'co' ? v / 1000 : v;
+        break;
+      }
+    }
   }
   return out;
 }

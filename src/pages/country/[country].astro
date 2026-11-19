@@ -33,6 +33,9 @@ try {
 } catch (err) {
   console.error('[country]', err);
   error = describeError(err);
+  // Data provider down: tell crawlers to come back rather than index the error state.
+  Astro.response.status = 503;
+  Astro.response.headers.set('Retry-After', '600');
 }
 
 const valued = (snap?.readings ?? []).filter((r) => readingValue(r, standard) !== null);
@@ -58,8 +61,8 @@ const jsonLd = {
 ---
 
 <BaseLayout
-  title={`${area} Air Quality Index (AQI) — Live City Rankings | Live AQI`}
-  description={`Live air quality across ${area}: ${median !== null ? `median ${stdName} ${median} (${medianCat!.label}) across ${valued.length} cities. ` : ''}Most polluted and cleanest cities, 7-day trend and city dashboards.`}
+  title={`${area} AQI Today — Live Air Quality Index & City Rankings | Live AQI`}
+  description={`${area} AQI today: ${median !== null ? `median ${stdName} ${median} (${medianCat!.label}) across ${valued.length} cities. ` : ''}Live air quality index by city, most polluted and cleanest cities, 7-day trend and pollution levels.`}
   canonicalPath={canonicalPath}
   jsonLd={jsonLd}
 >
@@ -101,7 +104,6 @@ const jsonLd = {
                   id="region-select"
                   name="region"
                   class="h-10 max-w-[14rem] rounded-full border border-line bg-surface px-4 text-sm font-semibold text-ink"
-                  onchange="this.form.requestSubmit()"
                 >
                   <option value="">All regions</option>
                   {regions.map((r) => (
@@ -110,7 +112,8 @@ const jsonLd = {
                     </option>
                   ))}
                 </select>
-                <noscript><button class="btn btn-ghost-dark h-10" type="submit">Go</button></noscript>
+                {/* Explicit submit: navigating on `change` would fire on every arrow key (WCAG 3.2.2). */}
+                <button class="btn btn-ghost-dark h-10" type="submit">Go</button>
               </form>
             )
           }

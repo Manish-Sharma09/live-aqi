@@ -1,0 +1,30 @@
+---
+/**
+ * Google Analytics 4, only when GA_MEASUREMENT_ID is set (wrangler.jsonc `vars`).
+ * Advertising signals are always off (the site shows no ads). In the EEA, UK and
+ * Switzerland, analytics cookies default to denied (Consent Mode v2): GA then sends
+ * cookieless pings only, since the site has no consent banner.
+ */
+import { analytics } from '../lib/config';
+
+const id = analytics.gaId;
+const CONSENT_REGIONS = [
+  'AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE', 'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT',
+  'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE', 'IS', 'LI', 'NO', 'GB', 'CH',
+];
+const init = id
+  ? `window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}window.gtag=gtag;` +
+    `gtag('consent','default',{ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied',analytics_storage:'denied',region:${JSON.stringify(CONSENT_REGIONS)}});` +
+    `gtag('consent','default',{ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied',analytics_storage:'granted'});` +
+    `gtag('js',new Date());gtag('config',${JSON.stringify(id)},{allow_google_signals:false,allow_ad_personalization_signals:false});`
+  : '';
+---
+
+{
+  id && (
+    <>
+      <script is:inline async src={`https://www.googletagmanager.com/gtag/js?id=${id}`} />
+      <script is:inline set:html={init} />
+    </>
+  )
+}

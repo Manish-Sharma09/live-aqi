@@ -6,6 +6,7 @@ import { defaultStandardFor, isStandardId } from '../../lib/aqi/standards';
 import { getCountry } from '../../lib/geo/places';
 import { loadDashboard } from '../../lib/services/dashboard';
 import { resolveCitySlug } from '../../lib/services/reports';
+import { nameWithSearchName } from '../../lib/seo';
 import { skyTheme } from '../../lib/theme';
 
 export const prerender = false;
@@ -16,6 +17,8 @@ if (!resolved) return Astro.rewrite('/404');
 if ('redirect' in resolved) return Astro.redirect(`${resolved.redirect}${Astro.url.search}`, 301);
 
 const { place } = resolved;
+// One URL per city: /city/Delhi → /city/delhi (search engines treat paths as case-sensitive).
+if (slug !== place.slug) return Astro.redirect(`/city/${place.slug}${Astro.url.search}`, 301);
 const stdParam = Astro.url.searchParams.get('std');
 const standard = isStandardId(stdParam) ? stdParam : defaultStandardFor(place.cc);
 const data = await loadDashboard(place);
@@ -23,14 +26,23 @@ const result = data.report?.current.aqi[standard] ?? null;
 
 // Successful renders are cached at the edge briefly; errors are never cached.
 if (data.report) Astro.cache.set({ maxAge: 600, swr: 1800, tags: ['city'] });
+else {
+  // Data provider down: tell crawlers to come back rather than index the error state.
+  Astro.response.status = 503;
+  Astro.response.headers.set('Retry-After', '600');
+}
 
 const country = getCountry(place.cc);
 const where = [place.region, place.country].filter(Boolean).join(', ');
 const stdName = standard === 'in' ? 'India NAQI' : 'US AQI';
-const title = `${place.name} Air Quality Index (AQI) — Live PM2.5 & Pollution | Live AQI`;
+// Titles follow how people search: "<city> aqi today", "<city> aqi live", "<city> pollution"
+// (see .docs/seo-keywords.md), with the commonly searched name, e.g. "Gurugram (Gurgaon)".
+const searchedAs = nameWithSearchName(place.name, place.slug);
+const placeLine = [place.name, place.region !== place.name ? place.region : undefined, place.country].filter(Boolean).join(', ');
+const title = `${searchedAs} AQI Today — Live Air Quality Index & Pollution | Live AQI`;
 const description = result
-  ? `Live air quality in ${place.name}, ${where}: ${stdName} ${result.aqi} (${result.category.label}). Real-time PM2.5, PM10, hourly trends, health advice and pollution alerts.`
-  : `Live air quality in ${place.name}, ${where}: real-time AQI, PM2.5, PM10, hourly trends, health advice and pollution alerts.`;
+  ? `${searchedAs} AQI today is ${result.beyondScale ? '500+' : result.aqi} (${result.category.label}, ${stdName}). Live air quality index for ${placeLine}: PM2.5, PM10, pollution level, weather, forecast and health advice.`
+  : `${searchedAs} AQI today: live air quality index for ${placeLine} with PM2.5, PM10, pollution level, weather, forecast and health advice.`;
 const canonicalPath = `/city/${place.slug}`;
 const site = Astro.site!.href.replace(/\/$/, '');
 
@@ -50,6 +62,7 @@ const jsonLd = [
     name: title,
     url: `${site}${canonicalPath}`,
     description,
+    ...(data.report ? { dateModified: new Date(data.report.current.time * 1000).toISOString() } : {}),
     about: {
       '@type': 'Place',
       name: `${place.name}, ${place.country}`,
@@ -65,9 +78,10 @@ const jsonLd = [
   canonicalPath={canonicalPath}
   jsonLd={jsonLd}
   theme={skyTheme(place, data.weather?.weather)}
+  sun={data.weather?.weather.sun}
   currentPlace={{ name: place.name }}
 >
-  <PlaceDashboard data={data} standard={standard} shareUrl={`${site}${canonicalPath}`}>
+  <PlaceDashboard data={data} standard={standard} shareUrl={`${site}${canonicalPath}`} questions>
     <nav slot="top" aria-label="Breadcrumb">
       <ol class="flex flex-wrap items-center gap-2 text-sm text-ink-3">
         <li><a href="/" class="hover:text-ink hover:underline">Live AQI</a></li>

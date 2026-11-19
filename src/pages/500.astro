@@ -1,0 +1,36 @@
+---
+/**
+ * Shown by Astro when a page throws while rendering. The error itself is logged,
+ * never shown. Data-provider outages don't come here: those pages render their own
+ * "data unavailable" state with a 503.
+ */
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+interface Props {
+  error?: unknown;
+}
+
+export const prerender = false;
+
+const { error } = Astro.props;
+if (error) console.error('[500]', Astro.url.pathname, error);
+Astro.response.status = 500;
+Astro.response.headers.set('cache-control', 'no-store');
+---
+
+<BaseLayout title="Something went wrong — Live AQI" description="Live AQI hit an unexpected error. Please try again in a moment." noindex>
+  <section class="stage flex-1">
+    <div class="shell pt-14 pb-24 lg:pt-20">
+      <p class="type-code text-on-stage-faint">Error 500</p>
+      <h1 class="type-hero mt-4 max-w-3xl">Something went wrong on our side.</h1>
+      <p class="mt-6 max-w-xl text-lg text-on-stage-muted">
+        This page couldn’t be loaded because of an unexpected error. It’s not your connection. Please try again in a moment;
+        if it keeps happening, <a class="link" href="/contact">let us know</a>.
+      </p>
+      <div class="mt-10 flex flex-wrap gap-3">
+        <a href={`${Astro.url.pathname}${Astro.url.search}`} class="btn btn-primary">Try again</a>
+        <a href="/" class="btn btn-ghost-dark">Go to your dashboard</a>
+      </div>
+    </div>
+  </section>
+</BaseLayout>

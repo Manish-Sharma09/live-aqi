@@ -12,6 +12,10 @@ interface Props {
 const { url, title, text, compact = false, class: className } = Astro.props;
 ---
 
+<!--
+  The button never changes size: "Link copied" appears in a small bubble above it
+  and the icon turns into a check, so the buttons beside it don't shift.
+-->
 <button
   type="button"
   data-share
@@ -20,17 +24,86 @@ const { url, title, text, compact = false, class: className } = Astro.props;
   data-text={text}
   aria-label={compact ? 'Share this reading' : undefined}
   title={compact ? 'Share' : undefined}
-  class:list={['btn btn-ghost-dark', compact && 'lg:btn-icon', className]}
+  class:list={['btn btn-ghost-dark relative', compact && 'lg:btn-icon', className]}
 >
-  <Icon name="share" size={18} />
+  <span class="share-icons grid" aria-hidden="true">
+    <span class="share-icon" data-icon="share"><Icon name="share" size={18} /></span>
+    <span class="share-icon" data-icon="done"><Icon name="check" size={18} /></span>
+  </span>
   <span data-share-label class:list={[compact && 'lg:sr-only']}>Share</span>
+  <span class="share-tip" data-share-tip role="status" aria-live="polite"></span>
 </button>
+
+<style>
+  .share-icons > .share-icon {
+    grid-area: 1 / 1;
+    display: grid;
+    place-items: center;
+    transition:
+      opacity 180ms var(--ease-out),
+      transform 320ms var(--ease-spring);
+  }
+  .share-icon[data-icon='done'] {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  [data-share][data-state='copied'] .share-icon[data-icon='share'] {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  [data-share][data-state='copied'] .share-icon[data-icon='done'] {
+    opacity: 1;
+    transform: none;
+    color: var(--accent);
+  }
+
+  /* Feedback bubble: rises in above the button, outside the layout. */
+  .share-tip {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    padding: 6px 12px;
+    border-radius: 999px;
+    background: var(--ink);
+    color: var(--bg);
+    font-size: 0.75rem;
+    font-weight: 650;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transform: translate(-50%, 6px) scale(0.96);
+    transition:
+      opacity 180ms var(--ease-out),
+      transform 320ms var(--ease-spring);
+  }
+  .share-tip:empty {
+    visibility: hidden;
+  }
+  [data-share][data-state] .share-tip {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+</style>
 
 <script>
   document.querySelectorAll<HTMLButtonElement>('[data-share]').forEach((btn) => {
+    const tip = btn.querySelector<HTMLElement>('[data-share-tip]');
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const done = (state: 'copied' | 'failed', message: string) => {
+      btn.dataset.state = state;
+      if (tip) tip.textContent = message;
+      btn.setAttribute('title', message);
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        delete btn.dataset.state;
+        btn.setAttribute('title', 'Share');
+        // Clear once the bubble has faded, so it doesn't re-announce.
+        setTimeout(() => tip && !btn.dataset.state && (tip.textContent = ''), 320);
+      }, 2500);
+    };
+
     btn.addEventListener('click', async () => {
       const { url = location.href, title = document.title, text = '' } = btn.dataset;
-      const label = btn.querySelector('[data-share-label]');
       if (navigator.share) {
         try {
           await navigator.share({ url, title, text });
@@ -41,15 +114,10 @@ const { url, title, text, compact = false, class: className } = Astro.props;
       }
       try {
         await navigator.clipboard.writeText(url);
-        if (label) label.textContent = 'Link copied';
-        btn.setAttribute('title', 'Link copied');
+        done('copied', 'Link copied');
       } catch {
-        if (label) label.textContent = 'Copy failed';
+        done('failed', 'Copy failed');
       }
-      setTimeout(() => {
-        if (label) label.textContent = 'Share';
-        btn.setAttribute('title', 'Share');
-      }, 2500);
     });
   });
 </script>

@@ -17,6 +17,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import { categoryFor, STANDARDS, type StandardId } from '../../lib/aqi/standards';
 import { POLLUTANTS } from '../../lib/aqi/pollutants';
 import type { PollutantId } from '../../lib/aqi/standards';
+import { getStandardPref, saveStandardPref } from '../store';
 
 setWorkerUrl(workerUrl);
 
@@ -69,7 +70,7 @@ const STATION_MIN_ZOOM = 6;
 
 export async function initGlobalMap({ container, panel, stationsEnabled }: MapOptions) {
   const params = new URLSearchParams(location.search);
-  let standard: StandardId = params.get('std') === 'in' ? 'in' : 'us';
+  let standard: StandardId = (params.get('std') ?? getStandardPref()) === 'in' ? 'in' : 'us';
   let showStations = stationsEnabled && params.get('layer') === 'stations';
   const activeLevels = new Set([0, 1, 2, 3, 4, 5]);
   const lat = Number(params.get('lat'));
@@ -410,6 +411,7 @@ export async function initGlobalMap({ container, panel, stationsEnabled }: MapOp
   panel.querySelectorAll<HTMLButtonElement>('[data-std]').forEach((b) =>
     b.addEventListener('click', () => {
       standard = b.dataset.std === 'in' ? 'in' : 'us';
+      saveStandardPref(standard);
       applyStandard();
     }),
   );

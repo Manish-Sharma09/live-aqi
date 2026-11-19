@@ -2,7 +2,7 @@
 interface Props {
   title: string;
   description: string;
-  /** Path of the canonical URL (query strings are dropped). Defaults to the current path. */
+  /** Path of the canonical URL, with a query only for distinct page variants. Defaults to the current path (no query). */
   canonicalPath?: string;
   image?: string;
   noindex?: boolean;

@@ -25,8 +25,8 @@
   --line-strong: #c5d0de;
   --ink: #1b2942;
   --ink-2: #45546f;
-  --ink-3: #5f6d86;
-  --accent: #2f7fe6;
+  --ink-3: #56647d; /* ≥4.5:1 on every light surface */
+  --accent: #2570d4; /* white button text ≥4.5:1 */
   --accent-soft: #dbe9fc;
   --accent-ink: #1b4d8f;
   --on-accent: #ffffff;
@@ -93,6 +93,7 @@
   --z-popover: 55;
   --z-toast: 60;
   --z-skip: 70;
+  --z-preloader: 90;
   --header-h: 4.25rem;
 }
 
@@ -133,7 +134,8 @@
   --color-stage-line: var(--line);
   --color-on-stage: var(--ink);
   --color-on-stage-muted: var(--ink-2);
-  --color-on-stage-faint: var(--ink-3);
+  /* ink-2, not ink-3: small labels on the sky gradient need ≥4.5:1 even at its top (#a7cbf2). */
+  --color-on-stage-faint: var(--ink-2);
 
   --font-sans: var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
@@ -309,19 +311,7 @@
     border: 1px solid var(--line);
     border-radius: 16px;
   }
-  .glass {
-    background: var(--glass);
-    border: 1px solid var(--glass-border);
-    border-radius: 24px;
-    box-shadow: var(--shadow-pop);
-    -webkit-backdrop-filter: blur(18px) saturate(1.25);
-    backdrop-filter: blur(18px) saturate(1.25);
-  }
-  .glass-tile {
-    background: var(--glass-strong);
-    border: 1px solid var(--glass-border);
-    border-radius: 16px;
-  }
+  /* .glass, .glass-tile, .glass-pill: the liquid-glass material lives in liquid.css. */
 
   /* Buttons */
   .btn {
@@ -341,9 +331,6 @@
     transition-property: background-color, color, border-color, box-shadow, transform;
     transition-duration: var(--duration-fast);
     transition-timing-function: var(--ease-out);
-  }
-  .btn:active {
-    transform: translateY(1px);
   }
   .btn:disabled,
   .btn[aria-disabled='true'] {

@@ -1,10 +1,13 @@
 ---
 import '../styles/global.css';
+import '../styles/liquid.css'; // after global.css: refines its components
 import { Font } from 'astro:assets';
 import Seo from '../components/Seo.astro';
+import Analytics from '../components/Analytics.astro';
 import Header from '../components/Header.astro';
 import Footer from '../components/Footer.astro';
 import NotificationManager from '../components/NotificationManager.astro';
+import Preloader from '../components/Preloader.astro';
 
 interface Props {
   title: string;
@@ -19,44 +22,93 @@ interface Props {
    * day/night; otherwise the visitor's local time decides (before first paint).
    */
   theme?: 'light' | 'dark' | undefined;
+  /** The place's [sunrise, sunset] pairs, so a cached page still switches sky on time. */
+  sun?: Array<[number, number]> | undefined;
   currentPlace?: { name: string } | undefined;
 }
 
-const { title, description, canonicalPath, noindex, jsonLd, bare = false, theme, currentPlace } = Astro.props;
+const { title, description, canonicalPath, noindex, jsonLd, bare = false, theme, sun, currentPlace } = Astro.props;
 ---
 
 <!doctype html>
-<html lang="en" data-theme={theme ?? 'light'} data-theme-source={theme ? 'city' : 'local'}>
+<html lang="en" data-theme={theme ?? 'light'} data-theme-source={theme ? 'city' : 'local'} data-sun={theme && sun?.length ? JSON.stringify(sun) : undefined}>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <!-- Browser UI colour = the page's --bg; follows data-theme (set below), not the OS scheme. -->
+    <meta name="theme-color" content={theme === 'dark' ? '#08122b' : '#e6ecf4'} />
     <script is:inline>
-      // Apply the day/night theme before first paint: a session override wins,
-      // then the city's sky (set by the server), then the visitor's local time.
+      // Day/night sky. laqiSky() says which theme the clock calls for right now and
+      // when that next changes (ms, or null): a city page uses the city's sunrise and
+      // sunset (re-checked here because the HTML may be cached; same rule as
+      // dayFromSun()), other pages the visitor's local time (day = 6:00–18:00).
+      // theme null = unknown, keep what the server rendered. Header.astro calls it
+      // again every minute so the page turns dark at sunset while it's open.
+      window.laqiSky = function () {
+        var d = document.documentElement, s = d.getAttribute('data-sun');
+        if (s) {
+          var sun = JSON.parse(s), t = Date.now() / 1000, next = null;
+          if (t < sun[0][0] - 43200 || t >= sun[sun.length - 1][1] + 43200) return { theme: null, next: null };
+          var day = sun.some(function (p) { return t >= p[0] && t < p[1]; });
+          sun.forEach(function (p) {
+            p.forEach(function (b) { if (b > t && (next === null || b < next)) next = b; });
+          });
+          return { theme: day ? 'light' : 'dark', next: next === null ? null : next * 1000 };
+        }
+        if (d.getAttribute('data-theme-source') !== 'local') return { theme: null, next: null };
+        var now = new Date(), h = now.getHours(), isDay = h >= 6 && h < 18, at = new Date(now);
+        at.setHours(isDay ? 18 : 6, 0, 0, 0);
+        if (at <= now) at.setDate(at.getDate() + 1);
+        return { theme: isDay ? 'light' : 'dark', next: at.getTime() };
+      };
+      // The sun/moon toggle's choice for this page ("dark|<until ms>"), or null.
+      // It lasts until the next sunrise or sunset, then the sky takes over again;
+      // it's per page so it never hides another city's day/night.
+      window.laqiThemeOverride = function () {
+        try {
+          var k = 'laqi:theme:' + location.pathname, p = (sessionStorage.getItem(k) || '').split('|');
+          if ((p[0] === 'light' || p[0] === 'dark') && Date.now() < Number(p[1])) return p[0];
+          sessionStorage.removeItem(k);
+        } catch (e) {}
+        return null;
+      };
+      // Apply it before first paint: the toggle's choice, then the sky.
       (function () {
         try {
-          var d = document.documentElement;
-          var o = sessionStorage.getItem('laqi:theme');
-          if (o === 'light' || o === 'dark') d.setAttribute('data-theme', o);
-          else if (d.getAttribute('data-theme-source') === 'local') {
-            var h = new Date().getHours();
-            d.setAttribute('data-theme', h >= 6 && h < 18 ? 'light' : 'dark');
-          }
+          var d = document.documentElement, want = window.laqiThemeOverride() || window.laqiSky().theme;
+          if (want) d.setAttribute('data-theme', want);
+          var m = document.querySelector('meta[name="theme-color"]');
+          if (m) m.setAttribute('content', d.getAttribute('data-theme') === 'dark' ? '#08122b' : '#e6ecf4');
         } catch (e) {}
       })();
+      // Motion (src/scripts/motion.ts): reveal-on-scroll content is hidden only when the
+      // script will run; if it hasn't started within 4 s, show everything.
+      (function () {
+        var d = document.documentElement;
+        if (!window.matchMedia || !matchMedia('(prefers-reduced-motion: no-preference)').matches) return;
+        d.classList.add('motion');
+        setTimeout(function () {
+          if (!d.classList.contains('motion-ready')) d.classList.add('reveal-all');
+        }, 4000);
+        // Arrived through a page transition: the transition is the entrance.
+        addEventListener('pagereveal', function (e) {
+          if (e.viewTransition) d.classList.add('vt-arrival');
+        });
+      })();
     </script>
-    <meta name="theme-color" content="#e6ecf4" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#08122b" media="(prefers-color-scheme: dark)" />
-    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <link rel="icon" href="/favicon.ico" sizes="32x32" />
-    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <!-- ?v= busts the browser's favicon cache; bump it when the mark changes (npm run brand-assets). -->
+    <link rel="icon" href="/favicon.svg?v=2" type="image/svg+xml" />
+    <link rel="icon" href="/favicon.ico?v=2" sizes="32x32" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png?v=2" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <link rel="sitemap" href="/sitemap.xml" />
+    <link rel="sitemap" href="/sitemap-index.xml" />
     <Font cssVariable="--font-jakarta" preload={[{ subset: 'latin' }]} />
     <Seo title={title} description={description} canonicalPath={canonicalPath} noindex={noindex} jsonLd={jsonLd} />
     <meta name="generator" content={Astro.generator} />
+    <Analytics />
   </head>
   <body class="flex min-h-dvh flex-col">
+    <Preloader />
     <a
       href="#main"
       class="sr-only z-(--z-skip) rounded-ui bg-surface px-4 py-2 font-semibold text-ink focus:not-sr-only focus:fixed focus:top-3 focus:left-3"
@@ -68,5 +120,8 @@ const { title, description, canonicalPath, noindex, jsonLd, bare = false, theme,
     </main>
     {!bare && <Footer />}
     <NotificationManager />
+    <script>
+      import '../scripts/motion';
+    </script>
   </body>
 </html>

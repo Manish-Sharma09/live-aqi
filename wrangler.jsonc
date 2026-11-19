@@ -13,12 +13,25 @@
 			"binding": "LIVE_AQI_KV"
 		}
 	],
+	// Per-IP limit on /api/* (see src/worker.ts): 120 requests per minute.
+	// namespace_id is any account-unique integer you choose.
+	"ratelimits": [
+		{
+			"name": "API_RATE_LIMITER",
+			"namespace_id": "1001",
+			"simple": { "limit": 120, "period": 60 }
+		}
+	],
 	"triggers": {
-		// Check subscribers' locations for AQI threshold crossings every 30 minutes.
+		// Every 30 minutes: pre-build the world snapshot when due, and check subscribers'
+		// locations for AQI threshold crossings.
 		"crons": ["*/30 * * * *"]
 	},
 	"vars": {
-		"VAPID_SUBJECT": "mailto:alerts@live-aqi.com"
+		"VAPID_SUBJECT": "mailto:alerts@live-aqi.com",
+		// Google Analytics 4 measurement ID (Admin → Data streams → Web), e.g. "G-ABC123XYZ9".
+		// Empty = analytics off. The privacy policy switches its analytics section on automatically.
+		"GA_MEASUREMENT_ID": ""
 	},
 	"observability": {
 		"enabled": true

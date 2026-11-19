@@ -112,7 +112,9 @@ const providers = [
         we use the EPA’s <strong>NowCast</strong> for PM₂.₅ and PM₁₀ (a 12-hour weighted average that reacts to change; it needs 2 of
         the 3 latest hours). Ozone uses the 8-hour average (and the 1-hour table above 0.125 ppm, whichever is higher); CO the
         8-hour average; NO₂ and SO₂ hourly values (SO₂ above 304 ppb switches to the 24-hour table). Concentrations are
-        truncated as the EPA specifies before lookup. Values that exceed the top of the scale are shown as “500+”.
+        truncated as the EPA specifies before lookup. An 8-hour ozone mean above 0.200 ppm holds the ozone index at 300 or
+        more. A US AQI is reported only when PM₂.₅, PM₁₀ or ozone is available. Values past the top of the scale are capped at
+        500 and shown on the city card as “500+”.
       </p>
     </div>
     <div class="relative mt-4 overflow-x-auto">

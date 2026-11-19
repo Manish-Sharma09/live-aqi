@@ -14,6 +14,7 @@ import WeatherPanel from './WeatherPanel.astro';
 import RecentChanges from './RecentChanges.astro';
 import NearbyPanel from './NearbyPanel.astro';
 import SourcePanel from './SourcePanel.astro';
+import CityQuestions from './CityQuestions.astro';
 import StandardSwitch from './StandardSwitch.astro';
 import Section from '../ui/Section.astro';
 import ErrorState from '../ui/ErrorState.astro';
@@ -27,9 +28,11 @@ interface Props {
   data: DashboardData;
   standard: StandardId;
   shareUrl: string;
+  /** Show the "<city> AQI today" questions section (city pages). */
+  questions?: boolean;
 }
 
-const { data, standard, shareUrl } = Astro.props;
+const { data, standard, shareUrl, questions = false } = Astro.props;
 const { place, report, weather } = data;
 const result = report?.current.aqi[standard] ?? null;
 const showNearby = data.nearbyCities.length > 0 || data.stations.length > 0;
@@ -54,9 +57,9 @@ const sourceLine = stationCount > 0 ? `${stationCount} monitoring stations nearb
           </SkyScene>
 
           <div class="flex min-w-0 flex-col gap-5">
-            <WeatherTiles weather={weather?.weather ?? null} variant="card" class="hidden lg:grid" />
-            <TrendCard report={report} standard={standard} class="flex-1" />
-            <InfoCards report={report} standard={standard} stationCount={stationCount} class="hidden lg:grid" />
+            <WeatherTiles weather={weather?.weather ?? null} variant="card" class="hero-enter hidden [--d:220ms] lg:grid" />
+            <TrendCard report={report} standard={standard} class="hero-enter flex-1 [--d:290ms]" />
+            <InfoCards report={report} standard={standard} stationCount={stationCount} class="hero-enter hidden [--d:360ms] lg:grid" />
           </div>
         </div>
 
@@ -86,7 +89,7 @@ const sourceLine = stationCount > 0 ? `${stationCount} monitoring stations nearb
               <PollutantGrid current={report.current} standard={standard} />
             </Section>
 
-            <Section id="weather" title="Weather">
+            <Section id="weather" title={`Weather in ${place.name}`}>
               <WeatherPanel weather={weather} timezone={place.timezone} pm25={report.current.concentrations.pm25} />
             </Section>
 
@@ -97,6 +100,12 @@ const sourceLine = stationCount > 0 ? `${stationCount} monitoring stations nearb
             {showNearby && (
               <Section id="nearby" title="Air quality nearby" boxed>
                 <NearbyPanel cities={data.nearbyCities} stations={data.stations} standard={standard} stationsEnabled={waqi.enabled} />
+              </Section>
+            )}
+
+            {questions && (
+              <Section id="questions" title={`${place.name} AQI today: common questions`} boxed>
+                <CityQuestions report={report} standard={standard} />
               </Section>
             )}
 

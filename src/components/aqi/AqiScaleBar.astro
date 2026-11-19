@@ -12,6 +12,14 @@ const def = STANDARDS[standard];
 const max = def.scaleMax;
 const cats = def.categories;
 // Equal-width segments read better at small sizes; the marker is placed within its segment.
+const GAP = '0.25rem'; // gap-1 between segments
+const MARKER = '1.125rem'; // marker diameter (size-[1.125rem])
+/**
+ * Marker centre as a CSS length across the bar. It travels only between
+ * (segment start + radius) and (segment end − radius), so the whole marker sits
+ * on its own colour: a reading just inside a band (e.g. 156, Unhealthy) never
+ * straddles the boundary and looks like the band below.
+ */
 const pos = (() => {
   if (value === null) return null;
   const v = Math.min(Math.max(value, 0), max);
@@ -19,8 +27,10 @@ const pos = (() => {
   const c = cats[i === -1 ? cats.length - 1 : i]!;
   const lo = c.level === 0 ? 0 : c.min - 1;
   const hi = Math.min(c.max, max);
-  const within = hi > lo ? (v - lo) / (hi - lo) : 1;
-  return ((c.level + Math.min(Math.max(within, 0), 1)) / cats.length) * 100;
+  const within = Math.min(Math.max(hi > lo ? (v - lo) / (hi - lo) : 1, 0), 1);
+  const n = cats.length;
+  const seg = `((100% - ${n - 1} * ${GAP}) / ${n})`;
+  return `calc(${c.level} * (${seg} + ${GAP}) + ${seg} / 2 + ${(within - 0.5).toFixed(4)} * max(0px, ${seg} - ${MARKER}))`;
 })();
 const first = cats[0]!.label;
 const last = cats[cats.length - 1]!.label;
@@ -37,14 +47,16 @@ const last = cats[cats.length - 1]!.label;
     </div>
     {
       pos !== null && (
-        <span
-          class="absolute top-1/2 size-[1.125rem] -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] border-ink bg-white shadow-[0_2px_6px_rgb(0_0_0/0.25)] dark:border-white dark:bg-[#0b1630]"
-          style={`left:${pos.toFixed(2)}%`}
-        />
+        // The track spans the bar so the marker can slide in from the start with a transform.
+        <span class="scale-track pointer-events-none absolute inset-0" style={`--pos:${pos}`}>
+          <span
+            class="absolute top-1/2 left-(--pos) size-[1.125rem] -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] border-ink bg-white shadow-[0_2px_6px_rgb(0_0_0/0.25)] dark:border-white dark:bg-[#0b1630]"
+          />
+        </span>
       )
     }
   </div>
-  <div class="mt-2 flex justify-between text-[0.75rem] text-ink-3">
+  <div class="mt-2 flex justify-between text-[0.75rem] text-ink-2">
     <span>{first}</span>
     <span>{last}</span>
   </div>

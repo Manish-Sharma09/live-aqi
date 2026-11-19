@@ -3,14 +3,103 @@
  * Pure module — safe to import from client scripts.
  */
 
-export const ALERT_ACTIONS = [
-  'Air quality is good.',
-  'Unusually sensitive people should watch for symptoms.',
-  'Sensitive groups should reduce prolonged or heavy outdoor exertion.',
-  'Reduce prolonged outdoor activity. Sensitive groups should consider a well-fitting mask.',
-  'Avoid prolonged outdoor exposure. Wear a well-fitting N95 outside and keep windows closed.',
-  'Avoid all outdoor activity. Stay indoors with filtered air if you can, and follow local advisories.',
-] as const;
+/** Icon for one alert step (drawn by Icon.astro in the in-page alert). */
+export type AlertStepIcon = 'mask' | 'window' | 'home' | 'fan' | 'wind' | 'heart' | 'sun';
+
+export interface AlertStep {
+  icon: AlertStepIcon;
+  text: string;
+}
+
+/** What to do, said plainly: one headline and a few steps. */
+export interface AlertAdvice {
+  /** Leads the push title, which can't carry an icon of its own. */
+  emoji: string;
+  headline: string;
+  steps: AlertStep[];
+}
+
+/**
+ * Per category level, matching the health panel (health.ts): the action that
+ * matters most first. Steps are short enough for a notification line.
+ */
+const ADVICE: AlertAdvice[] = [
+  {
+    emoji: '🌿',
+    headline: 'Breathe easy',
+    steps: [
+      { icon: 'wind', text: 'Open the windows and let fresh air in' },
+      { icon: 'sun', text: 'A great time to be outside' },
+    ],
+  },
+  {
+    emoji: '🙂',
+    headline: 'Air is okay',
+    steps: [
+      { icon: 'sun', text: 'Fine for most outdoor plans' },
+      { icon: 'heart', text: 'Sensitive? Ease off if you cough or feel short of breath' },
+    ],
+  },
+  {
+    emoji: '⚠️',
+    headline: 'Take it easy outside',
+    steps: [
+      { icon: 'sun', text: 'Keep outdoor workouts shorter and lighter' },
+      { icon: 'heart', text: 'Asthma? Keep your inhaler handy' },
+      { icon: 'mask', text: 'Sensitive people: N95 mask on busy roads' },
+    ],
+  },
+  {
+    emoji: '😷',
+    headline: 'Wear a mask outside',
+    steps: [
+      { icon: 'mask', text: 'Wear an N95 / FFP2 mask outdoors' },
+      { icon: 'window', text: 'Keep windows closed' },
+      { icon: 'home', text: 'Move exercise indoors' },
+    ],
+  },
+  {
+    emoji: '😷',
+    headline: 'Mask on, windows shut',
+    steps: [
+      { icon: 'mask', text: 'N95 / FFP2 mask whenever you go out' },
+      { icon: 'window', text: 'Keep windows and doors closed' },
+      { icon: 'fan', text: 'Run an air purifier if you have one' },
+      { icon: 'home', text: 'Keep time outside short' },
+    ],
+  },
+  {
+    emoji: '🚨',
+    headline: 'Stay indoors',
+    steps: [
+      { icon: 'home', text: 'Stay inside — go out only if you must' },
+      { icon: 'mask', text: 'N95 / FFP2 mask essential outside' },
+      { icon: 'window', text: 'Seal windows; air purifier on high' },
+      { icon: 'heart', text: 'Chest pain or breathlessness? Get medical help' },
+    ],
+  },
+];
+
+const GASES = new Set(['o3', 'no2', 'so2', 'co']);
+
+/**
+ * Masks filter particles, not gases (O₃, NO₂, SO₂, CO): when a gas drives the
+ * index, limiting time outside is the advice instead, as in the health panel.
+ */
+const GAS_MASK_STEP: AlertStep = { icon: 'home', text: 'Limit time outside — masks don’t filter gases like ozone' };
+const GAS_HEADLINES: Partial<Record<number, string>> = { 3: 'Limit time outside', 4: 'Stay in, windows shut' };
+
+/** Headline and steps for a category level, adjusted when the main pollutant is a gas. */
+export function alertAdvice(level: number, dominant?: string | null): AlertAdvice {
+  const base = ADVICE[Math.min(Math.max(level, 0), ADVICE.length - 1)]!;
+  if (!dominant || !GASES.has(dominant) || level < 2) return base;
+  const steps = base.steps.filter((s) => s.icon !== 'mask');
+  return {
+    emoji: level >= 5 ? base.emoji : '⚠️',
+    headline: GAS_HEADLINES[level] ?? base.headline,
+    steps: [GAS_MASK_STEP, ...steps].slice(0, base.steps.length),
+  };
+}
 
 /** Category names per standard, by level — used to describe thresholds. */
 export const LEVEL_LABELS = {
@@ -22,12 +111,19 @@ export const STANDARD_SHORT = { us: 'US AQI', in: 'India NAQI' } as const;
 
 export type AlertKind = 'worse' | 'severe' | 'improved' | 'test';
 
-export interface AlertMessage {
+export interface AlertMessage extends AlertAdvice {
   kind: AlertKind;
-  title: string;
-  body: string;
   level: number;
+  /** Push notification title: the headline first ("😷 Wear a mask outside · Delhi"). */
+  title: string;
+  /** Push notification body: the reading, then the steps as "• " lines. */
+  body: string;
+  /** The reading in words, e.g. "Air turned Unhealthy · US AQI 156". */
+  reading: string;
 }
+
+/** Steps shown in a push body: the platforms show a few lines before truncating. */
+const PUSH_STEPS = 3;
 
 export function composeAlert(
   kind: AlertKind,
@@ -35,19 +131,37 @@ export function composeAlert(
   standard: 'us' | 'in',
   aqi: number,
   level: number,
+  /** Main pollutant id (e.g. 'pm25', 'o3'); picks gas-appropriate advice. */
+  dominant?: string | null,
 ): AlertMessage {
   const label = LEVEL_LABELS[standard][level] ?? '';
-  const reading = `${STANDARD_SHORT[standard]} ${aqi} — ${label}.`;
+  const value = `${STANDARD_SHORT[standard]} ${aqi}`;
+  let advice = alertAdvice(level, dominant);
+  let reading: string;
+  let title: string;
   switch (kind) {
     case 'severe':
-      return { kind, level, title: `Severe pollution in ${place}`, body: `${reading} ${ALERT_ACTIONS[level]}` };
+      reading = `Severe pollution: ${label} · ${value}`;
+      title = `${advice.emoji} ${advice.headline} · ${place}`;
+      break;
     case 'improved':
-      return { kind, level, title: `Air quality improved in ${place}`, body: `${reading} Conditions are back below your alert level.` };
+      // Recovered below the alert level: lead with the relief, then what's fine again.
+      if (level <= 1) advice = { ...advice, emoji: '🌿', headline: 'Breathe easier' };
+      else advice = { ...advice, emoji: '🌤️', headline: 'Air is improving' };
+      reading = `Now ${label} · ${value}`;
+      title = `${advice.emoji} ${advice.headline} · ${place}`;
+      break;
     case 'test':
-      return { kind, level, title: `Live AQI alerts are on for ${place}`, body: `Current reading: ${reading} You'll be notified when it crosses your threshold.` };
+      reading = `Right now: ${label} · ${value}`;
+      title = `🔔 Live AQI alerts are on for ${place}`;
+      break;
     default:
-      return { kind, level, title: `Air quality worsened in ${place}`, body: `${reading} ${ALERT_ACTIONS[level]}` };
+      reading = `Air turned ${label} · ${value}`;
+      title = `${advice.emoji} ${advice.headline} · ${place}`;
   }
+  const lead = kind === 'test' ? `${reading}. ${advice.emoji} ${advice.headline}:` : `${reading}.`;
+  const body = [lead, ...advice.steps.slice(0, PUSH_STEPS).map((s) => `• ${s.text}`)].join('\n');
+  return { kind, level, title, body, reading, ...advice };
 }
 
 export interface AlertState {

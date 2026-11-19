@@ -23,6 +23,9 @@ try {
   Astro.cache.set({ maxAge: 600, swr: 1800 });
 } catch (err) {
   error = describeError(err);
+  // Data provider down: tell crawlers to come back rather than index the error state.
+  Astro.response.status = 503;
+  Astro.response.headers.set('Retry-After', '600');
 }
 
 const rows = (snap?.readings ?? []).filter((r) => readingValue(r, standard) !== null);
@@ -71,8 +74,8 @@ const badge = (val: number) => {
 ---
 
 <BaseLayout
-  title="World Air Quality Overview — Live AQI by Country & Continent | Live AQI"
-  description="How clean is the world's air right now? Live air-quality overview of 300+ major cities by continent and country, with category distribution and links to every country."
+  title="World AQI Today — Air Quality by Country & Continent | Live AQI"
+  description="How clean is the world’s air right now? Live AQI overview of 300+ major cities by continent and country, with the most polluted countries and links to every country."
   canonicalPath="/world"
 >
   <section class="stage">

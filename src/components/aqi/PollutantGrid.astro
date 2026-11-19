@@ -47,7 +47,7 @@ const segments = def.categories.map((c) => ({
   items.length === 0 ? (
     <p class="text-muted">Pollutant measurements aren’t available for this location right now. Try again in a few minutes.</p>
   ) : (
-    <ul class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+    <ul class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3" data-reveal-stagger>
       {items.map(({ p, info, sub, cat, guideMean, ratio, naaqsMean, hourly, main }) => (
         <li class="card flex flex-col p-5 sm:p-6">
           <div class="flex items-start justify-between gap-3">
@@ -96,7 +96,7 @@ const segments = def.categories.map((c) => ({
             )}
             {guideMean !== undefined && (
               <>
-                <dt class="text-subtle">{info.who.averaging} average</dt>
+                <dt class="text-subtle">{info.who.averaging === '8-h' ? 'Max 8-h average' : `${info.who.averaging} average`}</dt>
                 <dd class="text-right">{formatConcentration(guideMean)} {info.displayUnit}</dd>
               </>
             )}

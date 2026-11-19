@@ -90,7 +90,8 @@ export function defaultStandardFor(countryCode: string | undefined): StandardId 
 
 export function categoryFor(standard: StandardId, aqi: number): AqiCategory {
   const cats = STANDARDS[standard].categories;
-  const v = Math.max(0, Math.round(aqi));
+  // Guard: NaN would otherwise fall through every comparison and read as the worst category.
+  const v = Number.isFinite(aqi) ? Math.max(0, Math.round(aqi)) : 0;
   for (const c of cats) if (v <= c.max) return c;
   return cats[cats.length - 1]!;
 }

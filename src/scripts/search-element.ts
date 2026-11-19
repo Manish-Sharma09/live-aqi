@@ -6,7 +6,7 @@
  *   "set-location"  save the result as "my location" and reload the homepage
  *   "event"         dispatch `laqi:search-select` (used by the map and alerts page)
  */
-import { saveLocation } from './store';
+import { saveLocation, withStandard } from './store';
 
 interface Result {
   type: 'city' | 'place' | 'country' | 'region' | 'station';
@@ -83,7 +83,9 @@ class LaqiSearch extends HTMLElement {
 
   private setStatus(text: string, visible = true) {
     this.status.textContent = text;
-    this.status.hidden = !visible || !text;
+    // Never `hidden`: a live region must stay in the accessibility tree for its
+    // changes to be announced. Screen-reader-only (or empty) text is hidden visually.
+    this.status.classList.toggle('sr-only', !visible || !text);
   }
 
   private onInput() {
@@ -222,7 +224,7 @@ class LaqiSearch extends HTMLElement {
       window.location.assign('/');
       return;
     }
-    window.location.assign(r.href);
+    window.location.assign(withStandard(r.href));
   }
 }
 

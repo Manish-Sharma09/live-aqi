@@ -4,59 +4,424 @@
  * and shows an on-screen alert when the AQI category actually changes across
  * the visitor's threshold. These are clearly labelled "in-page" — background
  * notifications are handled separately by Web Push (see /alerts).
+ *
+ * Each alert leads with what to do ("Wear a mask outside"), then the reading and
+ * a short checklist, and plays the Live AQI chime (alert-sound.ts). The chime
+ * also plays when a background notification arrives while a page is open.
  */
+import Icon from './ui/Icon.astro';
+
+const STEP_ICONS = ['mask', 'window', 'home', 'fan', 'wind', 'heart', 'sun'] as const;
 ---
 
 <div
   id="toast-region"
   role="region"
   aria-label="Air quality alerts"
-  class="pointer-events-none fixed inset-x-3 bottom-3 z-[60] flex flex-col items-end gap-2 sm:inset-x-auto sm:right-5 sm:bottom-5 sm:w-[24rem]"
+  aria-live="polite"
+  class="pointer-events-none fixed inset-x-3 bottom-3 z-[60] flex flex-col items-end gap-3 sm:inset-x-auto sm:right-6 sm:bottom-6 sm:w-[26rem]"
 >
 </div>
 
+<!--
+  The alert: a pane of frosted glass tinted by the air it reports. The category
+  colour blooms through the glass (green haze on a good day, deep maroon when
+  hazardous); a small dial shows where the reading sits on the scale and takes one
+  slow "breath" as the chime's breath plays; the steps are a plain checklist.
+  The footer line counts down to auto-dismiss (paused on hover/focus).
+-->
 <template id="toast-template">
-  <div
-    class="card pointer-events-auto w-full animate-toast p-4 shadow-pop"
-    data-toast
-  >
-    <div class="flex items-start gap-3">
-      <span data-swatch class="swatch mt-1.5 size-3"></span>
-      <div class="min-w-0 flex-1">
-        <p class="text-xs font-semibold text-ink-3" data-kind>In-page alert</p>
-        <p class="mt-1 font-semibold" data-title></p>
-        <p class="mt-1 text-sm text-ink-2" data-body></p>
-        <a data-link class="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold underline underline-offset-4">View dashboard</a>
+  <div class="aqi-alert glass pointer-events-auto w-full" data-toast>
+    <span class="aqi-alert__bloom" aria-hidden="true"></span>
+
+    <div class="flex items-center gap-2 pt-5 pr-3 pl-6">
+      <span class="aqi-alert__live" aria-hidden="true"></span>
+      <p class="min-w-0 truncate text-xs text-ink-3">
+        <span data-kind class="font-bold tracking-[0.06em] uppercase"></span>
+        <span aria-hidden="true"> · </span>
+        <span data-place class="font-semibold"></span>
+      </p>
+      <button type="button" data-dismiss data-press class="aqi-alert__icon-btn ml-auto" aria-label="Dismiss alert">
+        <Icon name="x" size={16} />
+      </button>
+    </div>
+
+    <div class="mt-3 flex items-center gap-4 px-6">
+      <div class="aqi-alert__dial" data-dial aria-hidden="true">
+        <span class="aqi-alert__arc"></span>
+        <span data-aqi class="relative text-base leading-none font-extrabold tracking-[-0.02em] tabular-nums"></span>
       </div>
-      <button type="button" data-dismiss class="grid size-8 shrink-0 place-items-center rounded-full hover:bg-surface-2" aria-label="Dismiss alert">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"></path></svg>
+      <div class="min-w-0">
+        <p data-headline class="text-xl leading-[1.15] font-extrabold tracking-[-0.015em] text-ink"></p>
+        <p data-reading class="mt-1 text-sm font-semibold text-ink-2"></p>
+      </div>
+    </div>
+
+    <ul class="mt-4 space-y-2 px-6" data-steps></ul>
+
+    <div class="aqi-alert__foot mt-5 flex items-center justify-between gap-3 pr-3 pl-6">
+      <span class="aqi-alert__timer" data-timer aria-hidden="true"></span>
+      <a data-link class="inline-flex min-h-11 items-center gap-1 text-sm font-bold text-ink underline-offset-4 hover:underline">
+        Health advice
+        <Icon name="chevron-right" size={16} />
+      </a>
+      <button type="button" data-sound data-press class="aqi-alert__sound" aria-pressed="true">
+        <span data-sound-on class="contents"><Icon name="volume" size={16} /><span>Sound on</span></span>
+        <span data-sound-off class="contents" hidden><Icon name="volume-off" size={16} /><span>Sound off</span></span>
       </button>
     </div>
   </div>
 </template>
 
+<template id="toast-step-template">
+  <li class="aqi-alert__step flex items-center gap-3 text-sm font-semibold text-ink">
+    <span data-step-icon class="aqi-alert__chip glass-tile"></span>
+    <span data-step-text></span>
+  </li>
+</template>
+
+{
+  STEP_ICONS.map((name) => (
+    <template data-alert-icon={name}>
+      <Icon name={name} size={18} />
+    </template>
+  ))
+}
+
+<style is:global>
+  /* --------------------------------------------------------------- alert pane */
+  .aqi-alert {
+    /* A little more body than the AQI card's glass: it floats over any page text. */
+    --lg-blur: 28px;
+    --lg-saturate: 1.9;
+    --lg-tint-top: color-mix(in srgb, var(--surface) 76%, transparent);
+    --lg-tint-bottom: color-mix(in srgb, var(--surface) 64%, transparent);
+    /* --cat = category colour; --cat-d = its variant for dark backgrounds (standards.ts). */
+    --tone: var(--cat);
+    --bloom-a: 34%;
+    --bloom-b: 16%;
+    --grain: 0.07;
+    overflow: hidden;
+    border-radius: 28px;
+  }
+  [data-theme='dark'] .aqi-alert {
+    --tone: var(--cat-d, var(--cat));
+    --bloom-a: 26%;
+    --bloom-b: 12%;
+    --grain: 0.1;
+  }
+
+  /* The air's colour, seen through the glass, plus a fine frost grain. */
+  .aqi-alert__bloom {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    pointer-events: none;
+    background:
+      radial-gradient(85% 70% at 6% 0%, color-mix(in srgb, var(--tone) var(--bloom-a), transparent), transparent 72%),
+      radial-gradient(70% 60% at 100% 100%, color-mix(in srgb, var(--tone) var(--bloom-b), transparent), transparent 76%);
+  }
+  .aqi-alert__bloom::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    opacity: var(--grain);
+    mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  /* Live dot: the category colour with a soft halo. */
+  .aqi-alert__live {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: var(--tone);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--tone) 22%, transparent);
+  }
+
+  /* Dial: where the reading sits on the scale (same equal-band mapping as the scale bar). */
+  .aqi-alert__dial {
+    position: relative;
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 56px;
+    height: 56px;
+    border-radius: 999px;
+    color: var(--ink);
+    background: color-mix(in srgb, var(--surface) 72%, transparent);
+    box-shadow:
+      inset 0 1px 0 0 var(--lg-rim),
+      0 10px 22px -12px var(--tone);
+  }
+  .aqi-alert__arc {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: conic-gradient(
+      from 220deg,
+      var(--tone) 0 calc(var(--p, 0) * 280deg),
+      color-mix(in srgb, var(--ink) 12%, transparent) 0 280deg,
+      transparent 0
+    );
+    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 4.5px));
+    mask: radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 4.5px));
+  }
+  /* The breath: a glow that swells and fades once (twice when urgent). */
+  .aqi-alert__dial::before {
+    content: '';
+    position: absolute;
+    inset: -10px;
+    z-index: -1;
+    border-radius: inherit;
+    background: radial-gradient(closest-side, color-mix(in srgb, var(--tone) 55%, transparent), transparent);
+    opacity: 0;
+  }
+
+  /* Step icon chips: small glass tiles, concentric with nothing — they sit on the pane. */
+  .aqi-alert__chip {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
+    color: var(--ink-2);
+  }
+
+  .aqi-alert__icon-btn,
+  .aqi-alert__sound {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-width: 44px;
+    min-height: 44px;
+    border-radius: 999px;
+    color: var(--ink-3);
+    /* transitions + press: the shared [data-press] rule (liquid.css) */
+  }
+  .aqi-alert__sound {
+    padding: 0 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+  .aqi-alert__icon-btn:hover,
+  .aqi-alert__sound:hover {
+    color: var(--ink);
+    background: color-mix(in srgb, var(--ink) 7%, transparent);
+  }
+  .aqi-alert__icon-btn:focus-visible,
+  .aqi-alert__sound:focus-visible,
+  .aqi-alert a:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  /* Footer hairline; the category-coloured bar on it runs down to auto-dismiss. */
+  .aqi-alert__foot {
+    position: relative;
+    padding-block: 4px;
+  }
+  .aqi-alert__foot::before,
+  .aqi-alert__timer {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 24px;
+    right: 24px;
+    height: 1px;
+    background: color-mix(in srgb, var(--ink) 10%, transparent);
+  }
+  .aqi-alert__timer {
+    height: 2px;
+    top: -0.5px;
+    border-radius: 2px;
+    background: color-mix(in srgb, var(--tone) 75%, transparent);
+    transform-origin: left center;
+  }
+  .aqi-alert[data-urgent] .aqi-alert__timer {
+    display: none;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .aqi-alert {
+      animation: aqi-alert-in 620ms var(--ease-spring) both;
+    }
+    .aqi-alert__dial::before {
+      animation: aqi-alert-breathe 1.6s var(--ease-in-out) 80ms both;
+    }
+    .aqi-alert[data-urgent] .aqi-alert__dial::before {
+      animation-iteration-count: 2;
+    }
+    .aqi-alert__step {
+      animation: aqi-alert-step 420ms var(--ease-out) both;
+      animation-delay: calc(240ms + var(--i, 0) * 70ms);
+    }
+  }
+  @keyframes aqi-alert-in {
+    from {
+      opacity: 0;
+      transform: translate3d(0, 24px, 0) scale(0.94);
+    }
+  }
+  @keyframes aqi-alert-breathe {
+    0% {
+      opacity: 0;
+      transform: scale(0.7);
+    }
+    45% {
+      opacity: 1;
+      transform: scale(1.18);
+    }
+    100% {
+      opacity: 0;
+      transform: scale(1.4);
+    }
+  }
+  @keyframes aqi-alert-step {
+    from {
+      opacity: 0;
+      transform: translate3d(0, 8px, 0);
+    }
+  }
+</style>
+
 <script>
-  import { baselineState, composeAlert, evaluateAlert } from '../lib/aqi/alert-copy';
-  import { alertLocation, fetchSummary, getAlertSettings, getLastSeen, setLastSeen, type Summary } from '../scripts/store';
+  import { baselineState, composeAlert, evaluateAlert, type AlertKind, type AlertMessage } from '../lib/aqi/alert-copy';
+  import { STANDARDS } from '../lib/aqi/standards';
+  import { playAlertSound, primeAlertSound } from '../scripts/alert-sound';
+  import { alertLocation, fetchSummary, getAlertSettings, getLastSeen, saveAlertSettings, setLastSeen, type Summary } from '../scripts/store';
 
   const CHECK_EVERY_MS = 15 * 60 * 1000;
   let lastCheck = 0;
 
-  function showToast(opts: { title: string; body: string; href: string; color: string; urgent: boolean; kind: string }) {
+  primeAlertSound();
+
+  /** One chime at a time: an in-page alert and a push for the same change can land together. */
+  let lastChime = 0;
+  function chime(kind: AlertKind) {
+    if (!getAlertSettings().sound || Date.now() - lastChime < 60_000) return;
+    lastChime = Date.now();
+    void playAlertSound(kind);
+  }
+
+  const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /** Leave quietly: sink and fade, then go. */
+  function dismiss(node: HTMLElement) {
+    if (node.dataset.leaving) return;
+    node.dataset.leaving = '';
+    if (reducedMotion()) return node.remove();
+    node
+      .animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translate3d(0, 12px, 0) scale(0.96)' }], {
+        duration: 200,
+        easing: 'cubic-bezier(0.4, 0, 1, 1)',
+        fill: 'forwards',
+      })
+      .finished.then(() => node.remove(), () => node.remove());
+  }
+
+  /**
+   * Auto-dismiss after 30 s; the footer bar shows the time left and stops while
+   * the alert is hovered or focused (so it never vanishes while being read).
+   */
+  function countdown(node: HTMLElement) {
+    const bar = node.querySelector<HTMLElement>('[data-timer]');
+    if (!bar) return;
+    const run = bar.animate([{ transform: 'scaleX(1)' }, { transform: 'scaleX(0)' }], { duration: 30_000, easing: 'linear', fill: 'forwards' });
+    run.finished.then(() => dismiss(node), () => {});
+    let hovered = false;
+    let focused = false;
+    const sync = () => (hovered || focused ? run.pause() : run.play());
+    node.addEventListener('pointerenter', () => ((hovered = true), sync()));
+    node.addEventListener('pointerleave', () => ((hovered = false), sync()));
+    // Keyboard focus holds it (someone is reading or tabbing through); a mouse click doesn't.
+    node.addEventListener('focusin', (e) => ((focused = (e.target as HTMLElement).matches(':focus-visible')), sync()));
+    node.addEventListener('focusout', (e) => {
+      if (node.contains(e.relatedTarget as Node | null)) return;
+      focused = false;
+      sync();
+    });
+  }
+
+  function icon(name: string): Node {
+    const tpl = document.querySelector<HTMLTemplateElement>(`template[data-alert-icon="${name}"]`);
+    return tpl ? tpl.content.cloneNode(true) : document.createTextNode('');
+  }
+
+  /** Where a reading sits on the dial, 0–1: equal bands per category, like the scale bar. */
+  function dialPosition(standard: 'us' | 'in', aqi: number): number {
+    const def = STANDARDS[standard];
+    const v = Math.min(Math.max(aqi, 0), def.scaleMax);
+    const c = def.categories.find((x) => Math.round(v) <= x.max) ?? def.categories[def.categories.length - 1]!;
+    const lo = c.level === 0 ? 0 : c.min - 1;
+    const hi = Math.min(c.max, def.scaleMax);
+    const within = hi > lo ? Math.min(Math.max((v - lo) / (hi - lo), 0), 1) : 1;
+    return (c.level + within) / def.categories.length;
+  }
+
+  /** Every open alert's sound button shows the current setting. */
+  function syncSoundButtons() {
+    const on = getAlertSettings().sound;
+    document.querySelectorAll<HTMLButtonElement>('#toast-region [data-sound]').forEach((b) => {
+      b.setAttribute('aria-pressed', String(on));
+      b.querySelector<HTMLElement>('[data-sound-on]')!.hidden = !on;
+      b.querySelector<HTMLElement>('[data-sound-off]')!.hidden = on;
+    });
+  }
+
+  function showToast(opts: {
+    msg: AlertMessage;
+    place: string;
+    href: string;
+    standard: 'us' | 'in';
+    aqi: number;
+    label: string;
+  }) {
     const region = document.getElementById('toast-region');
     const tpl = document.getElementById('toast-template') as HTMLTemplateElement | null;
-    if (!region || !tpl) return;
+    const stepTpl = document.getElementById('toast-step-template') as HTMLTemplateElement | null;
+    if (!region || !tpl || !stepTpl) return;
+    const { msg } = opts;
+    const urgent = msg.kind === 'severe';
     const node = tpl.content.firstElementChild!.cloneNode(true) as HTMLElement;
-    node.setAttribute('role', opts.urgent ? 'alert' : 'status');
-    node.querySelector<HTMLElement>('[data-swatch]')!.style.setProperty('--cat', opts.color);
-    node.querySelector('[data-kind]')!.textContent = opts.urgent ? 'In-page alert · High priority' : `In-page alert · ${opts.kind}`;
-    node.querySelector('[data-title]')!.textContent = opts.title;
-    node.querySelector('[data-body]')!.textContent = opts.body;
-    node.querySelector<HTMLAnchorElement>('[data-link]')!.href = opts.href;
-    node.querySelector('[data-dismiss]')!.addEventListener('click', () => node.remove());
+    node.setAttribute('role', urgent ? 'alert' : 'status');
+    if (urgent) node.dataset.urgent = '';
+    const cat = STANDARDS[opts.standard].categories[Math.min(Math.max(msg.level, 0), 5)]!;
+    node.style.setProperty('--cat', cat.color);
+    node.style.setProperty('--cat-d', cat.text.dark);
+    node.style.setProperty('--p', dialPosition(opts.standard, opts.aqi).toFixed(3));
+    node.querySelector('[data-aqi]')!.textContent = String(opts.aqi);
+    node.querySelector('[data-kind]')!.textContent = opts.label;
+    node.querySelector('[data-place]')!.textContent = opts.place;
+    node.querySelector('[data-headline]')!.textContent = msg.headline;
+    node.querySelector('[data-reading]')!.textContent = msg.reading;
+    const list = node.querySelector<HTMLElement>('[data-steps]')!;
+    msg.steps.forEach((step, i) => {
+      const li = stepTpl.content.firstElementChild!.cloneNode(true) as HTMLElement;
+      li.style.setProperty('--i', String(i));
+      li.querySelector<HTMLElement>('[data-step-icon]')!.appendChild(icon(step.icon));
+      li.querySelector('[data-step-text]')!.textContent = step.text;
+      list.appendChild(li);
+    });
+    node.querySelector<HTMLAnchorElement>('[data-link]')!.href = `${opts.href}#health`;
+    node.querySelector('[data-dismiss]')!.addEventListener('click', () => dismiss(node));
+    node.querySelector('[data-sound]')!.addEventListener('click', () => {
+      saveAlertSettings({ ...getAlertSettings(), sound: !getAlertSettings().sound });
+      syncSoundButtons();
+    });
     region.insertBefore(node, region.firstChild);
-    if (!opts.urgent) setTimeout(() => node.remove(), 20000);
+    syncSoundButtons();
+    if (!urgent) countdown(node);
+    chime(msg.kind);
   }
+
+  /** Short label above the alert (in-page alerts stay labelled as such; see /alerts). */
+  const kindLabel = (kind: AlertKind) =>
+    kind === 'severe' ? 'High priority' : kind === 'improved' ? 'Improvement' : kind === 'test' ? 'Alerts on' : 'In-page alert';
 
   function evaluate(token: string, s: Summary) {
     const settings = getAlertSettings();
@@ -74,15 +439,8 @@
     const { kind, next } = evaluateAlert(prev.state ?? null, r.level, s.time, settings.threshold, settings);
     setLastSeen({ token, standard, aqi: r.aqi, level: r.level, time: s.time, state: next });
     if (!kind || !settings.inPage) return;
-    const msg = composeAlert(kind, s.name, standard, r.aqi, r.level);
-    showToast({
-      title: msg.title,
-      body: msg.body,
-      href: s.href,
-      color: r.color,
-      urgent: kind === 'severe',
-      kind: kind === 'improved' ? 'Improvement' : 'Air quality change',
-    });
+    const msg = composeAlert(kind, s.name, standard, r.aqi, r.level, r.dominant);
+    showToast({ msg, place: s.name, href: s.href, standard, aqi: r.aqi, label: kindLabel(kind) });
   }
 
   async function check(force = false) {
@@ -92,6 +450,30 @@
     const summary = await fetchSummary(loc.token, force);
     if (summary) evaluate(loc.token, summary);
   }
+
+  // A background notification arrived while this page is the one in view
+  // (sw.js picks one visible tab): the device shows it; this adds the chime.
+  navigator.serviceWorker?.addEventListener('message', (e) => {
+    const d = e.data as { type?: string; kind?: AlertKind } | null;
+    if (d?.type === 'laqi:push-alert' && d.kind) chime(d.kind);
+  });
+
+  /**
+   * Preview from the alerts page: what an alert at the chosen level looks and
+   * sounds like for the watched place (a typical reading for that category).
+   */
+  window.addEventListener('laqi:alert-preview', async (e) => {
+    const d = (e as CustomEvent<{ level: number; standard: 'auto' | 'us' | 'in'; token?: string; name?: string }>).detail;
+    const summary = d.token ? await fetchSummary(d.token).catch(() => null) : null;
+    const standard = d.standard === 'auto' ? (summary?.defaultStandard ?? 'us') : d.standard;
+    const cat = STANDARDS[standard].categories[Math.min(Math.max(d.level, 0), 5)]!;
+    const aqi = Math.round(cat.min + (Math.min(cat.max, cat.min + 99) - cat.min) * 0.3);
+    const kind: AlertKind = cat.level >= 5 ? 'severe' : 'worse';
+    const place = d.name ?? summary?.name ?? 'your location';
+    const msg = composeAlert(kind, place, standard, aqi, cat.level, 'pm25');
+    lastChime = 0; // a preview always sounds
+    showToast({ msg, place, href: summary?.href ?? '/', standard, aqi, label: 'Preview' });
+  });
 
   const start = () => {
     check();

@@ -28,13 +28,15 @@ export default defineConfig({
       // Optional: Open-Meteo commercial API key (switches to the customer-* endpoints).
       OPEN_METEO_API_KEY: envField.string({ context: 'server', access: 'secret', optional: true }),
       // Web Push (VAPID). When unset, background push alerts are reported as unavailable.
-      VAPID_PUBLIC_KEY: envField.string({ context: 'server', access: 'public', optional: true }),
+      // All three are read at runtime (`access: 'secret'`): a `public` server variable is
+      // inlined at build time, which would bake the local .dev.vars key into the bundle and
+      // ignore the production `wrangler secret` / `vars` values.
+      VAPID_PUBLIC_KEY: envField.string({ context: 'server', access: 'secret', optional: true }),
       VAPID_PRIVATE_KEY: envField.string({ context: 'server', access: 'secret', optional: true }),
-      VAPID_SUBJECT: envField.string({
-        context: 'server',
-        access: 'public',
-        default: 'mailto:alerts@live-aqi.com',
-      }),
+      VAPID_SUBJECT: envField.string({ context: 'server', access: 'secret', optional: true }),
+      // Optional: Google Analytics 4 measurement ID ("G-XXXXXXXXXX"), set in wrangler.jsonc `vars`.
+      // Read at runtime like VAPID_SUBJECT; when unset, no analytics script is loaded.
+      GA_MEASUREMENT_ID: envField.string({ context: 'server', access: 'secret', optional: true }),
     },
   },
 
@@ -56,5 +58,8 @@ export default defineConfig({
 
   vite: {
     plugins: [tailwindcss()],
+    // Emit JSON imports (the ~1.5 MB city list) as JSON.parse("…") rather than a JS
+    // object literal: much faster to parse on every Worker cold start.
+    json: { stringify: true },
   },
 });

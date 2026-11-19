@@ -1,0 +1,528 @@
+/*
+ * Liquid glass + motion, layered on the soft-sky design system.
+ *
+ * Material: translucent tint + saturated backdrop blur, a top-lit specular rim,
+ * an inner glow, and a soft highlight that follows the pointer (set by
+ * src/scripts/motion.ts). On Chromium desktops, elements with [data-lens] also
+ * refract the backdrop at their edges (an SVG displacement filter built per size).
+ *
+ * Motion: short, ease-out entrances; nothing loops except the slow sky ambience,
+ * which pauses offscreen. Everything is off under prefers-reduced-motion, and the
+ * glass turns solid under prefers-reduced-transparency.
+ *
+ * Tunables are the custom properties below.
+ */
+
+/* ------------------------------------------------------------- tokens */
+:root,
+[data-theme='light'] {
+  --lg-tint-top: rgb(255 255 255 / 0.7); /* glass body, top of the gradient */
+  --lg-tint-bottom: rgb(255 255 255 / 0.56); /* …and bottom (keeps small text ≥4.5:1 over the skyline) */
+  --lg-rim: rgb(255 255 255 / 0.95); /* specular edge where light hits */
+  --lg-rim-soft: rgb(255 255 255 / 0.32); /* the rest of the edge */
+  --lg-inner-glow: rgb(255 255 255 / 0.55); /* light pooled inside the top edge */
+  --lg-sheen: rgb(255 255 255 / 0.7); /* pointer highlight */
+  --lg-shadow: 0 1px 1px rgb(27 41 66 / 0.04), 0 12px 32px -12px rgb(27 41 66 / 0.24), 0 34px 70px -34px rgb(27 41 66 / 0.3);
+  --lg-pill-shadow: 0 1px 2px rgb(27 41 66 / 0.06), 0 6px 16px -8px rgb(27 41 66 / 0.22);
+  --lg-ink: color-mix(in srgb, var(--accent) 22%, transparent); /* light that blooms from a click */
+}
+[data-theme='dark'] {
+  --lg-tint-top: rgb(36 58 108 / 0.56);
+  --lg-tint-bottom: rgb(12 24 56 / 0.5);
+  --lg-rim: rgb(200 220 255 / 0.5);
+  --lg-rim-soft: rgb(200 220 255 / 0.1);
+  --lg-inner-glow: rgb(140 180 255 / 0.16);
+  --lg-sheen: rgb(150 190 255 / 0.22);
+  --lg-shadow: 0 1px 1px rgb(0 0 0 / 0.3), 0 14px 36px -12px rgb(0 0 0 / 0.55), 0 36px 72px -30px rgb(0 0 0 / 0.6);
+  --lg-pill-shadow: 0 1px 2px rgb(0 0 0 / 0.35), 0 6px 16px -8px rgb(0 0 0 / 0.5);
+  --lg-ink: rgb(150 190 255 / 0.22);
+}
+:root {
+  --lg-blur: 18px; /* backdrop blur of large glass */
+  --lg-saturate: 1.7; /* colour lift behind the glass */
+  --ease-spring: cubic-bezier(0.32, 0.72, 0, 1); /* settles softly, no bounce */
+  --ease-emphasized: cubic-bezier(0.2, 0, 0, 1);
+  --reveal-duration: 760ms; /* scroll reveals */
+  --reveal-distance: 26px;
+  --stagger: 70ms; /* between items entering together */
+}
+
+/* ----------------------------------------------------------- material */
+@layer components {
+  .glass,
+  .glass-pill,
+  .glass-tile {
+    position: relative;
+    isolation: isolate;
+  }
+  dialog.glass:modal {
+    position: fixed; /* keep the UA's modal placement */
+  }
+  /* Scrolling lists keep the box-shadow rim only (pseudo layers would scroll away). */
+  .glass[role='listbox']::before,
+  .glass[role='listbox']::after {
+    display: none;
+  }
+
+  /* Large glass panel (the AQI card, dialogs, toasts). */
+  .glass {
+    border: 0;
+    border-radius: 24px;
+    background: linear-gradient(180deg, var(--lg-tint-top), var(--lg-tint-bottom));
+    box-shadow:
+      inset 0 1px 0 0 var(--lg-rim),
+      inset 0 0 0 1px var(--lg-rim-soft),
+      inset 0 22px 40px -28px var(--lg-inner-glow),
+      var(--lg-shadow);
+    -webkit-backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate));
+    backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate));
+  }
+
+  /* Specular rim: brightest where the light comes from (top left), fading round the edge. */
+  .glass::before,
+  .glass-pill::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    padding: 1px;
+    border-radius: inherit;
+    background: linear-gradient(150deg, var(--lg-rim) 0%, transparent 32%, transparent 64%, var(--lg-rim-soft) 84%, var(--lg-rim) 100%);
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+
+  /* Soft light on the surface; follows the pointer on desktops (--gx/--gy from motion.ts). */
+  .glass::after,
+  .glass-pill::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    background: radial-gradient(var(--sheen-size, 420px) circle at var(--gx, 22%) var(--gy, -10%), var(--lg-sheen), transparent 60%);
+    opacity: var(--sheen, 0.5);
+    transition: opacity 500ms var(--ease-out);
+    pointer-events: none;
+  }
+
+  /* Tiles inside a glass panel: no second backdrop blur (the panel already has it). */
+  .glass-tile {
+    border-radius: 16px;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--lg-tint-top) 92%, white 8%), var(--lg-tint-bottom));
+    box-shadow:
+      inset 0 1px 0 0 var(--lg-rim),
+      inset 0 0 0 1px var(--lg-rim-soft);
+  }
+
+  /* Small glass controls (header buttons, segmented tracks). */
+  .glass-pill {
+    --sheen-size: 120px;
+    --sheen: 0;
+    background: linear-gradient(180deg, var(--lg-tint-top), var(--lg-tint-bottom));
+    box-shadow:
+      inset 0 1px 0 0 var(--lg-rim),
+      inset 0 0 0 1px var(--lg-rim-soft),
+      var(--lg-pill-shadow);
+    -webkit-backdrop-filter: blur(12px) saturate(var(--lg-saturate));
+    backdrop-filter: blur(12px) saturate(var(--lg-saturate));
+    /* press + transitions: see "press" below */
+  }
+
+  /* Opaque-enough variant for menus with lots of text (search results). */
+  .glass-strong {
+    --lg-tint-top: color-mix(in srgb, var(--surface) 90%, transparent);
+    --lg-tint-bottom: color-mix(in srgb, var(--surface) 82%, transparent);
+  }
+
+  /* Header: clear at the top of the page, frosted once content scrolls under it. */
+  .site-header {
+    background: color-mix(in srgb, var(--bg) 55%, transparent);
+    border-bottom: 1px solid transparent;
+    -webkit-backdrop-filter: blur(20px) saturate(1.8);
+    backdrop-filter: blur(20px) saturate(1.8);
+    transition:
+      background-color 400ms var(--ease-out),
+      border-color 400ms var(--ease-out),
+      box-shadow 400ms var(--ease-out);
+  }
+  .site-header[data-scrolled] {
+    background: color-mix(in srgb, var(--surface) 72%, transparent);
+    border-bottom-color: var(--line);
+    box-shadow:
+      inset 0 -1px 0 0 var(--lg-rim-soft),
+      0 10px 30px -22px rgb(27 41 66 / 0.35);
+  }
+
+  /* Segmented control: recessed glass track, raised liquid thumb. */
+  .seg {
+    background: color-mix(in srgb, var(--surface-2) 70%, transparent);
+    box-shadow: inset 0 1px 2px rgb(27 41 66 / 0.08);
+    -webkit-backdrop-filter: blur(12px) saturate(1.6);
+    backdrop-filter: blur(12px) saturate(1.6);
+  }
+  /* The raised thumb lives on ::before so it can fade and settle in (opacity +
+     transform) instead of snapping: a gradient and shadow can't transition. */
+  .seg > a,
+  .seg > button {
+    position: relative;
+    isolation: isolate;
+  }
+  .seg > a::before,
+  .seg > button::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--accent-soft) 80%, white 20%), var(--accent-soft));
+    box-shadow:
+      inset 0 1px 0 0 var(--lg-rim),
+      0 1px 2px rgb(27 41 66 / 0.08),
+      0 4px 10px -4px rgb(27 41 66 / 0.18);
+    opacity: 0;
+    transform: scale(0.9);
+    transition:
+      opacity 200ms var(--ease-out),
+      transform 380ms var(--ease-spring);
+    pointer-events: none;
+  }
+  [data-theme='dark'] .seg > a::before,
+  [data-theme='dark'] .seg > button::before {
+    background: linear-gradient(180deg, color-mix(in srgb, var(--accent-soft) 85%, white 15%), var(--accent-soft));
+  }
+  .seg > [aria-pressed='true'],
+  .seg > [aria-current='page'],
+  .seg > [aria-selected='true'] {
+    background: transparent;
+  }
+  .seg > [aria-pressed='true']::before,
+  .seg > [aria-current='page']::before,
+  .seg > [aria-selected='true']::before {
+    opacity: 1;
+    transform: none;
+  }
+
+  /* Buttons: a touch of top light (the press is shared, below). */
+  .btn-primary,
+  .btn-ink {
+    --lg-ink: rgb(255 255 255 / 0.32);
+    box-shadow:
+      inset 0 1px 0 0 rgb(255 255 255 / 0.28),
+      0 6px 16px -6px color-mix(in srgb, var(--accent) 60%, transparent);
+  }
+
+  /*
+   * Click bloom: on press, a soft light spreads through the control from the
+   * point touched and fades on release (motion.ts adds .press-ink). It sits
+   * above the control's background and below its label, clipped to its shape.
+   * Layered, so a utility such as `absolute` still wins over `relative` here.
+   */
+  :where(.btn, .glass-pill, .seg > a, .seg > button, .vt-nav-thumb, [data-press]) {
+    position: relative;
+    isolation: isolate;
+  }
+  .press-ink {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    overflow: hidden;
+    pointer-events: none;
+  }
+  .press-ink > span {
+    position: absolute;
+    border-radius: 50%;
+    background: radial-gradient(closest-side, var(--lg-ink), var(--lg-ink) 45%, transparent);
+    opacity: 0;
+    will-change: transform, opacity;
+  }
+}
+
+/* ------------------------------------------------------------------ press */
+/*
+ * One press for every button-like control. It goes in fast (110 ms, ease-out),
+ * so even a quick tap shows it, and comes back slowly on a soft spring (420 ms):
+ * that asymmetry is what makes a click feel smooth rather than twitchy. Only
+ * transform moves (no layout), and colours ease at one pace everywhere.
+ * The same controls get the click bloom (above); keep the two lists and
+ * PRESSABLE in motion.ts in step.
+ * Unlayered on purpose, so a utility such as `transition-colors` can't drop
+ * transform from the list and make the press snap.
+ */
+:where(.btn, .glass-pill, .seg > a, .seg > button, .vt-nav-thumb, [data-press]) {
+  --press: 0.95;
+  transition-property: transform, background-color, color, border-color, box-shadow, opacity;
+  transition-duration: 420ms, 200ms, 200ms, 200ms, 200ms, 200ms;
+  transition-timing-function: var(--ease-spring), var(--ease-out), var(--ease-out), var(--ease-out), var(--ease-out), var(--ease-out);
+  -webkit-tap-highlight-color: transparent;
+}
+:where(.btn) {
+  --press: 0.97; /* wide buttons travel less */
+}
+:where(.btn, .glass-pill, .seg > a, .seg > button, .vt-nav-thumb, [data-press]):active:not(:disabled, [aria-disabled='true']) {
+  transform: scale(var(--press));
+  transition-duration: 110ms, 120ms, 120ms, 120ms, 120ms, 120ms;
+  transition-timing-function: var(--ease-out);
+}
+@media (prefers-reduced-motion: reduce) {
+  /* No movement: the press is a brief dim instead. */
+  :where(.btn, .glass-pill, .seg > a, .seg > button, .vt-nav-thumb, [data-press]):active:not(:disabled, [aria-disabled='true']) {
+    transform: none;
+    opacity: 0.8;
+  }
+}
+
+/* --------------------------------------------- sky ambience (hero scene) */
+/* Clouds glide side to side (--drift each way, set per cloud in SkyScene)… */
+@keyframes lg-drift {
+  from {
+    transform: translate3d(calc(var(--drift, 24px) * -1), 0, 0);
+  }
+  to {
+    transform: translate3d(var(--drift, 24px), 0, 0);
+  }
+}
+/* …and float a little (on the cloud's path, so it doesn't fight the drift). */
+@keyframes lg-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+@keyframes lg-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.035);
+  }
+}
+@keyframes lg-twinkle {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+
+/* Layers shift a few pixels against the pointer, nearer ones more (--px/--py from motion.ts, -1…1). */
+.scene [data-depth] {
+  translate: calc(var(--px, 0) * var(--depth) * -1px) calc(var(--py, 0) * var(--depth) * -1px);
+}
+.scene [data-depth='skyline'] {
+  --depth: 4;
+  scale: 1.02;
+  transform-origin: 50% 100%;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Sine easing keeps the glide even; the negative delays start each cloud
+     mid-path (at its laid-out spot, already moving) and out of step. */
+  .scene .sky-cloud {
+    animation: lg-drift 26s cubic-bezier(0.37, 0, 0.63, 1) -13s infinite alternate;
+  }
+  .scene .sky-cloud-2 {
+    animation-duration: 19s;
+    animation-delay: -9.5s;
+  }
+  .scene .sky-cloud path {
+    animation: lg-bob 9s cubic-bezier(0.37, 0, 0.63, 1) infinite;
+  }
+  .scene .sky-cloud-2 path {
+    animation-duration: 7s;
+    animation-delay: -3s;
+  }
+  .scene .sky-glow {
+    animation: lg-breathe 8s var(--ease-in-out) infinite;
+  }
+  .scene .sky-stars circle:nth-child(5n) {
+    animation: lg-twinkle 4.5s var(--ease-in-out) infinite;
+  }
+  .scene .sky-stars circle:nth-child(10n) {
+    animation-duration: 6s;
+    animation-delay: -2s;
+  }
+  /* No work while the scene is scrolled away (motion.ts sets the attribute). */
+  .scene[data-offscreen] *,
+  .scene[data-offscreen] *::before {
+    animation-play-state: paused !important;
+  }
+}
+
+/* ------------------------------------------------------- entrances */
+@keyframes lg-rise {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 18px, 0) scale(0.985);
+  }
+}
+@keyframes lg-fade-scale {
+  from {
+    opacity: 0;
+    transform: scale(1.025);
+  }
+}
+@keyframes lg-marker-in {
+  from {
+    transform: translateX(calc(var(--pos) * -1));
+  }
+}
+@keyframes lg-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes lg-fade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes lg-dialog-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, -8px, 0) scale(0.97);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Hero: the sky settles, then the card rises; side cards follow (--d = delay). */
+  html.motion:not(.vt-arrival) .hero-scene {
+    animation: lg-fade-scale 900ms var(--ease-out) both;
+  }
+  html.motion:not(.vt-arrival) .hero-enter {
+    animation: lg-rise 700ms var(--ease-spring) both;
+    animation-delay: var(--d, 0ms);
+  }
+  /* The scale marker slides from the start of the bar to the reading. */
+  html.motion:not(.vt-arrival) .scale-track {
+    animation: lg-marker-in 1000ms var(--ease-spring) 250ms both;
+  }
+
+  /* Scroll reveals: hidden only once motion.ts is known to run (html.motion). */
+  html.motion:not(.reveal-all) [data-reveal]:not(.is-revealed) {
+    opacity: 0;
+    transform: translate3d(0, var(--reveal-distance), 0);
+  }
+  html.motion [data-reveal] {
+    transition:
+      opacity var(--reveal-duration) var(--ease-out),
+      transform var(--reveal-duration) var(--ease-spring);
+    transition-delay: var(--reveal-delay, 0ms);
+  }
+
+  /* Trend line draws itself in on first view (motion.ts adds .chart-intro + pathLength). */
+  .chart-intro path[pathLength] {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    animation: lg-draw 1200ms var(--ease-out) 150ms forwards;
+  }
+  .chart-intro path[fill^='url'],
+  .chart-intro circle {
+    animation: lg-fade 700ms var(--ease-out) 700ms both;
+  }
+
+  dialog[open].glass {
+    animation: lg-dialog-in 260ms var(--ease-spring);
+  }
+}
+
+/* While the arrival splash is up (Preloader.astro), the hero waits behind it and
+   makes its entrance as the splash lifts. Same specificity as the rules above,
+   later in the file, so it wins. */
+html.motion.preloading :is(.hero-scene, .hero-enter, .scale-track) {
+  animation-play-state: paused;
+}
+
+/* --------------------------------------------------- page transitions */
+/* The header stays put while the page underneath changes; the AQI card and sky
+   carry over between places (the theme switch turns these names off). */
+html:not(.theme-vt) .site-header {
+  view-transition-name: site-header;
+}
+html:not(.theme-vt) .vt-sky {
+  view-transition-name: sky-scene;
+}
+html:not(.theme-vt) .vt-aqi-card {
+  view-transition-name: aqi-card;
+}
+html:not(.theme-vt) .seg > [aria-current='page'].vt-std-thumb {
+  view-transition-name: std-thumb;
+}
+@media (width >= 64rem) {
+  /* Desktop nav: the current-page pill glides to the next section. */
+  html:not(.theme-vt) .vt-nav-thumb[aria-current='page'] {
+    view-transition-name: nav-thumb;
+  }
+}
+
+@keyframes lg-vt-out {
+  to {
+    opacity: 0;
+  }
+}
+/* Opacity only: a slide made same-layout changes (US AQI ↔ India NAQI, city to
+   city) look like the content jumped. */
+@keyframes lg-vt-in {
+  from {
+    opacity: 0;
+  }
+}
+::view-transition-group(*) {
+  animation-duration: 460ms;
+  animation-timing-function: var(--ease-spring);
+}
+::view-transition-old(root) {
+  animation: lg-vt-out 200ms var(--ease-in) both;
+}
+::view-transition-new(root) {
+  animation: lg-vt-in 320ms var(--ease-out) 40ms both;
+}
+/* Day/night switch: the new theme spreads from the toggle (clip-path set in Header). */
+html.theme-vt::view-transition-old(root),
+html.theme-vt::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+/* ---------------------------------------------------- accessibility */
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+  .scene [data-depth] {
+    translate: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .glass,
+  .glass-pill,
+  .glass-tile,
+  .seg,
+  .site-header,
+  .site-header[data-scrolled] {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    background: var(--surface) !important;
+  }
+}
+
+@media print {
+  [data-reveal] {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}

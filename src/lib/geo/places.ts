@@ -154,6 +154,11 @@ export function resolveAlias(slug: string): string | undefined {
   return idx().aliases[slug];
 }
 
+/** Whether `name` is this city's name or a known former/alternative one ("Gurgaon" → Gurugram). */
+export function isCityNamed(city: City, name: string): boolean {
+  return normalize(city.name) === normalize(name) || resolveAlias(slugify(name)) === city.slug;
+}
+
 export function getCityById(id: number): City | undefined {
   return idx().byId.get(id);
 }

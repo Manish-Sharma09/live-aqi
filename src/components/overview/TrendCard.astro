@@ -39,7 +39,7 @@ const historyHours = payload.nowIndex + 1;
   <p data-caption class="mt-1 text-sm text-ink-3">Hourly {STANDARDS[standard].shortName}, last 24 hours</p>
   {historyHours < 24 && <p class="mt-1 text-sm text-ink-3">Only {historyHours} hours of history are available so far.</p>}
 
-  <div data-plot tabindex="0" class="relative mt-4 rounded-ui outline-offset-4 select-none" aria-describedby="trend-help">
+  <div data-plot data-draw-in tabindex="0" class="relative mt-4 min-h-[240px] rounded-ui outline-offset-4 select-none" aria-describedby="trend-help">
     <Fragment set:html={svg} />
     <div
       data-tooltip
@@ -115,12 +115,18 @@ const historyHours = payload.nowIndex + 1;
     let width = 720;
     let active = -1;
 
+    // One formatter, made once: building an Intl.DateTimeFormat costs milliseconds, and
+    // "7 days" formats 168 rows — per-row formatters froze the page for ~0.6 s on click.
+    let timeFormat: Intl.DateTimeFormat | null | undefined;
     const fmtTime = (t: number) => {
-      try {
-        return new Intl.DateTimeFormat('en-US', { timeZone: payload.timezone, weekday: 'short', hour: 'numeric', minute: '2-digit', hour12: true }).format(t * 1000);
-      } catch {
-        return new Date(t * 1000).toUTCString();
+      if (timeFormat === undefined) {
+        try {
+          timeFormat = new Intl.DateTimeFormat('en-US', { timeZone: payload.timezone, weekday: 'short', hour: 'numeric', minute: '2-digit', hour12: true });
+        } catch {
+          timeFormat = null;
+        }
       }
+      return timeFormat ? timeFormat.format(t * 1000) : new Date(t * 1000).toUTCString();
     };
     const fmt = (v: number | null, d = 1) => (v === null ? '—' : v.toFixed(d));
     const el = (tag: string, cls: string, text?: string) => {
@@ -130,11 +136,15 @@ const historyHours = payload.nowIndex + 1;
       return n;
     };
 
-    function render() {
+    /** Draw the chart; `fade` eases the new one in (a range/measure switch), instead of a hard swap. */
+    function render(fade = false) {
       width = Math.max(280, Math.round(plot.clientWidth));
       plot.querySelector('svg')?.remove();
       plot.insertAdjacentHTML('afterbegin', renderSoftChart(buildSoftTrendSpec(payload, range, metric, width, HEIGHT, id)));
       hideTip();
+      if (fade && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        plot.querySelector('svg')?.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 260, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' });
+      }
     }
 
     function updateText() {
@@ -236,7 +246,7 @@ const historyHours = payload.nowIndex + 1;
           else metric = b.dataset.metric as TrendMetric;
           root.querySelectorAll(`[data-${attr}]`).forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
           updateText();
-          render();
+          render(true);
         }),
       );
     bind('range');

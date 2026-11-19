@@ -1,5 +1,6 @@
 import { citiesNear, type Place } from '../geo/places';
 import { waqi } from '../config';
+import { settleWithin } from './cache';
 import { describeError } from './http';
 import { getLocationReport, getWeather, getWorldSnapshot, type CityReading, type LocationReport } from './reports';
 import { nearbyStations, type Station } from './waqi';
@@ -14,6 +15,9 @@ export interface DashboardData {
   stations: Array<Station & { distanceKm: number }>;
 }
 
+/** Longest a page waits for an optional section's data before rendering without it. */
+const OPTIONAL_WAIT_MS = 2500;
+
 /** Load everything a place dashboard needs, in parallel. Each part fails independently. */
 export async function loadDashboard(place: Place): Promise<DashboardData> {
   const [reportRes, weather, world, stations] = await Promise.all([
@@ -25,7 +29,8 @@ export async function loadDashboard(place: Place): Promise<DashboardData> {
       },
     ),
     getWeather(place),
-    getWorldSnapshot().catch((err) => {
+    // Only feeds "nearby cities": don't hold the page for a world rebuild.
+    settleWithin(getWorldSnapshot(), OPTIONAL_WAIT_MS).catch((err) => {
       console.warn('[dashboard] world snapshot unavailable:', err);
       return null;
     }),

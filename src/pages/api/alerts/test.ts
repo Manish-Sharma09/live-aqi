@@ -4,7 +4,7 @@ import { composeAlert } from '../../../lib/aqi/alert-copy';
 import { defaultStandardFor } from '../../../lib/aqi/standards';
 import { push } from '../../../lib/config';
 import { deliver } from '../../../lib/push/sweep';
-import { getSubscription, putSubscription } from '../../../lib/push/subscriptions';
+import { getSubscription, putPendingMessage, putSubscription } from '../../../lib/push/subscriptions';
 import { isValidPushEndpoint } from '../../../lib/push/vapid';
 import { getLocationReport, resolveLocationToken } from '../../../lib/services/reports';
 
@@ -37,10 +37,13 @@ export const POST: APIRoute = async ({ request }) => {
   const r = report.current.aqi[std];
   if (!r) return error(502, 'No current reading for this location');
 
-  const msg = composeAlert('test', sub.location.name, std, r.aqi, r.category.level);
-  const updated = { ...sub, pending: { ...msg, url: `/city/${place.slug}`, createdAt: Date.now() }, lastTestAt: Date.now() };
-  await putSubscription(updated);
-  const outcome = await deliver(updated, 'normal');
+  const msg = composeAlert('test', sub.location.name, std, r.aqi, r.category.level, r.dominant);
+  const now = Date.now();
+  await Promise.all([
+    putPendingMessage(sub.id, { ...msg, url: `/city/${place.slug}`, createdAt: now }),
+    putSubscription({ ...sub, lastTestAt: now }),
+  ]);
+  const outcome = await deliver(sub, 'normal');
   if (outcome === 'gone') return error(410, 'This browser subscription has expired — please enable notifications again');
   if (outcome === 'failed') return error(502, 'The push service did not accept the notification');
   return json({ ok: true });

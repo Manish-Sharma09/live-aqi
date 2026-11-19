@@ -24,6 +24,9 @@ try {
   Astro.cache.set({ maxAge: 600, swr: 1800 });
 } catch (err) {
   error = describeError(err);
+  // Data provider down: tell crawlers to come back rather than index the error state.
+  Astro.response.status = 503;
+  Astro.response.headers.set('Retry-After', '600');
 }
 
 const rows = (snapshot?.readings ?? [])
@@ -39,13 +42,29 @@ const link = (patch: Record<string, string | null>) => {
   return `/rankings${s ? `?${s}` : ''}`;
 };
 const regionName = region ? CONTINENTS[region] : 'the world';
+// Each view/region variant has its own title and heading, so it is its own canonical page
+// (the standard switch `std` only changes units, so it is left out).
+const canonicalQuery = new URLSearchParams({ ...(view === 'clean' ? { view } : {}), ...(region ? { region } : {}) }).toString();
+const canonicalPath = `/rankings${canonicalQuery ? `?${canonicalQuery}` : ''}`;
 const heading = view === 'polluted' ? `Most polluted cities in ${regionName}` : `Cleanest cities in ${regionName}`;
+const site = Astro.site!.href.replace(/\/$/, '');
+// The ranked cities as an ordered list, so search engines can read the ranking itself.
+const jsonLd = rows.length
+  ? {
+      '@context': 'https://schema.org',
+      '@type': 'ItemList',
+      name: heading,
+      numberOfItems: rows.length,
+      itemListElement: rows.map((r, i) => ({ '@type': 'ListItem', position: i + 1, name: r.city.name, url: `${site}/city/${r.city.slug}` })),
+    }
+  : undefined;
 ---
 
 <BaseLayout
-  title={`${view === 'polluted' ? 'Most Polluted' : 'Cleanest'} Cities ${region ? `in ${CONTINENTS[region]}` : 'in the World'} Right Now — Live AQI Ranking | Live AQI`}
-  description={`Live ranking of the ${view === 'polluted' ? 'most polluted' : 'cleanest'} major cities ${region ? `in ${CONTINENTS[region]}` : 'worldwide'} by air quality index, with PM2.5, primary pollutant and 24-hour change.`}
-  canonicalPath="/rankings"
+  title={`AQI Ranking: ${view === 'polluted' ? 'Most Polluted' : 'Cleanest'} Cities ${region ? `in ${CONTINENTS[region]}` : 'in the World'} Today | Live AQI`}
+  description={`Live AQI ranking of the ${view === 'polluted' ? 'most polluted (highest AQI)' : 'cleanest (lowest AQI)'} major cities ${region ? `in ${CONTINENTS[region]}` : 'worldwide'} right now, with PM2.5, primary pollutant and 24-hour change.`}
+  canonicalPath={canonicalPath}
+  jsonLd={jsonLd}
 >
   <section class="stage">
     <div class="shell pt-10 pb-12 lg:pt-14 lg:pb-16">
@@ -78,7 +97,7 @@ const heading = view === 'polluted' ? `Most polluted cities in ${regionName}` : 
     </div>
   </section>
 
-  <section class="shell py-12 lg:py-16" aria-label={heading}>
+  <section class="shell py-12 lg:py-16" aria-label={heading} data-reveal>
     {
       error ? (
         <ErrorState title="Rankings are temporarily unavailable" message={`${error} Please try again in a few minutes.`} retryHref={Astro.url.pathname + Astro.url.search} />

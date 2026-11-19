@@ -17,6 +17,7 @@ const hrefFor = (std: StandardId) => {
 ---
 
 <nav aria-label="AQI standard" class:list={['seg', className]}>
-  <a href={hrefFor('us')} aria-current={current === 'us' ? 'page' : undefined} title="US EPA Air Quality Index">US AQI</a>
-  <a href={hrefFor('in')} aria-current={current === 'in' ? 'page' : undefined} title="India National Air Quality Index (CPCB)">India NAQI</a>
+  {/* .vt-std-thumb: the selected pill glides to the new choice across the page change. */}
+  <a href={hrefFor('us')} class="vt-std-thumb" aria-current={current === 'us' ? 'page' : undefined} title="US EPA Air Quality Index">US AQI</a>
+  <a href={hrefFor('in')} class="vt-std-thumb" aria-current={current === 'in' ? 'page' : undefined} title="India National Air Quality Index (CPCB)">India NAQI</a>
 </nav>
